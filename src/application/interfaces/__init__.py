@@ -4,6 +4,7 @@ from .alert_notifier import IAlertNotifier
 from .config_repository import IConfigRepository
 from .monitoring_scheduler import IMonitoringScheduler
 from .browser_detector import IBrowserDetector
+from .startup_manager import IStartupManager
 
 __all__ = [
     "IHttpChecker",
@@ -11,4 +12,5 @@ __all__ = [
     "IConfigRepository",
     "IMonitoringScheduler",
     "IBrowserDetector",
+    "IStartupManager",
 ]

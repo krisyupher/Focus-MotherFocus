@@ -19,6 +19,7 @@ from src.infrastructure.adapters import (
     ThreadedScheduler
 )
 from src.infrastructure.adapters.windows_browser_detector import WindowsBrowserDetector
+from src.infrastructure.adapters.windows_startup_manager import WindowsStartupManager
 from src.infrastructure.persistence import JsonConfigRepository
 from src.presentation import WebsiteMonitorGUI
 
@@ -41,7 +42,8 @@ def create_application() -> WebsiteMonitorGUI:
     http_checker = RequestsHttpChecker(timeout=5)
     alert_notifier = WindowsAlertNotifier(parent_window=root)
     scheduler = ThreadedScheduler()
-    browser_detector = WindowsBrowserDetector()  # NEW: Browser tab detection
+    browser_detector = WindowsBrowserDetector()  # Browser tab detection
+    startup_manager = WindowsStartupManager()  # Auto-startup configuration
 
     # Load or create monitoring session
     session = config_repository.load_session()
@@ -86,6 +88,7 @@ def create_application() -> WebsiteMonitorGUI:
         start_monitoring_use_case=start_monitoring_use_case,
         stop_monitoring_use_case=stop_monitoring_use_case,
         check_websites_use_case=check_websites_use_case,
+        startup_manager=startup_manager,  # Inject startup manager
         root=root
     )
 

@@ -10,6 +10,7 @@ from ..application.use_cases import (
     StopMonitoringUseCase,
     CheckWebsitesUseCase
 )
+from ..application.interfaces.startup_manager import IStartupManager
 from ..core.entities.monitoring_session import MonitoringSession
 
 
@@ -28,6 +29,7 @@ class WebsiteMonitorGUI:
         start_monitoring_use_case: Use case for starting monitoring
         stop_monitoring_use_case: Use case for stopping monitoring
         check_websites_use_case: Use case for checking websites
+        startup_manager: Optional manager for auto-startup configuration
         root: Optional tkinter root window (created if not provided)
     """
     session: MonitoringSession
@@ -36,6 +38,7 @@ class WebsiteMonitorGUI:
     start_monitoring_use_case: StartMonitoringUseCase
     stop_monitoring_use_case: StopMonitoringUseCase
     check_websites_use_case: CheckWebsitesUseCase
+    startup_manager: Optional[IStartupManager] = None
     root: Optional[tk.Tk] = None
 
     def __post_init__(self):
@@ -43,7 +46,7 @@ class WebsiteMonitorGUI:
         if self.root is None:
             self.root = tk.Tk()
 
-        self.root.title("Website Monitor - Focus Alert System")
+        self.root.title("Focus MotherFocus - Website Monitor")
         self.root.geometry("700x550")
 
         # GUI components (will be initialized in setup)
@@ -199,6 +202,21 @@ class WebsiteMonitorGUI:
         )
         self.stop_btn.pack(side=tk.LEFT, padx=10)
 
+        # Auto-startup checkbox (if startup manager available)
+        if self.startup_manager:
+            startup_frame = tk.Frame(control_frame)
+            startup_frame.pack(pady=(10, 0))
+
+            self.startup_var = tk.BooleanVar(value=self.startup_manager.is_enabled())
+            startup_check = tk.Checkbutton(
+                startup_frame,
+                text="Start automatically when computer turns on",
+                variable=self.startup_var,
+                command=self._toggle_startup,
+                font=('Arial', 10)
+            )
+            startup_check.pack()
+
         # Status bar
         self.status_label = tk.Label(
             self.root,
@@ -300,6 +318,39 @@ class WebsiteMonitorGUI:
         """Update status bar message"""
         if self.status_label:
             self.status_label.config(text=f"Status: {message}")
+
+    def _toggle_startup(self):
+        """Toggle auto-startup on/off"""
+        if not self.startup_manager:
+            return
+
+        if self.startup_var.get():
+            # Enable auto-startup
+            if self.startup_manager.enable():
+                self._update_status("Auto-startup enabled")
+                messagebox.showinfo(
+                    "Auto-Startup Enabled",
+                    "The application will now start automatically when you turn on your computer.\n\n"
+                    f"Startup command:\n{self.startup_manager.get_startup_command()}"
+                )
+            else:
+                # Failed to enable
+                self.startup_var.set(False)
+                messagebox.showerror(
+                    "Error",
+                    "Failed to enable auto-startup. Please run as administrator."
+                )
+        else:
+            # Disable auto-startup
+            if self.startup_manager.disable():
+                self._update_status("Auto-startup disabled")
+            else:
+                # Failed to disable
+                self.startup_var.set(True)
+                messagebox.showerror(
+                    "Error",
+                    "Failed to disable auto-startup. Please run as administrator."
+                )
 
     def _on_closing(self):
         """Handle window close event"""
