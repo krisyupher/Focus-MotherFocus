@@ -1,6 +1,8 @@
 {
     "websites": [
-        "https://x.com/"
+        "https://x.com/",
+        "https://facebook",
+        "https://www.facebook.com/"
     ],
     "monitoring_interval": 1
 }

@@ -18,6 +18,7 @@ from src.infrastructure.adapters import (
     WindowsAlertNotifier,
     ThreadedScheduler
 )
+from src.infrastructure.adapters.windows_browser_detector import WindowsBrowserDetector
 from src.infrastructure.persistence import JsonConfigRepository
 from src.presentation import WebsiteMonitorGUI
 
@@ -40,6 +41,7 @@ def create_application() -> WebsiteMonitorGUI:
     http_checker = RequestsHttpChecker(timeout=5)
     alert_notifier = WindowsAlertNotifier(parent_window=root)
     scheduler = ThreadedScheduler()
+    browser_detector = WindowsBrowserDetector()  # NEW: Browser tab detection
 
     # Load or create monitoring session
     session = config_repository.load_session()
@@ -72,7 +74,8 @@ def create_application() -> WebsiteMonitorGUI:
     check_websites_use_case = CheckWebsitesUseCase(
         session=session,
         http_checker=http_checker,
-        alert_notifier=alert_notifier
+        alert_notifier=alert_notifier,
+        browser_detector=browser_detector  # NEW: Inject browser detector
     )
 
     # Presentation layer - GUI
