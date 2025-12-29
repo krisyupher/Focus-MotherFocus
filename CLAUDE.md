@@ -42,6 +42,15 @@ pytest --cov=src --cov-report=html
 pip install -r requirements.txt
 ```
 
+### Building Executable
+```bash
+# Build standalone .exe using PyInstaller
+build.bat
+
+# Or manually:
+pyinstaller --clean FocusMonitor.spec
+```
+
 ### Python Syntax Check
 ```bash
 python -m py_compile <file.py>
@@ -80,6 +89,7 @@ Presentation → Application → Core ← Infrastructure
   - `IBrowserDetector` - detect if URL is open in browser
   - `IConfigRepository` - persist configuration
   - `IMonitoringScheduler` - schedule periodic tasks
+  - `IStartupManager` - manage auto-startup on system boot
 - **Use Cases**: Orchestrate domain entities
   - `AddWebsiteUseCase`, `RemoveWebsiteUseCase`
   - `StartMonitoringUseCase`, `StopMonitoringUseCase`
@@ -91,6 +101,7 @@ Presentation → Application → Core ← Infrastructure
   - `RequestsHttpChecker` - HTTP checking via requests library
   - `WindowsAlertNotifier` - Windows pop-ups and sound alerts
   - `WindowsBrowserDetector` - Browser tab detection (uses psutil, pywinauto, win32)
+  - `WindowsStartupManager` - Auto-startup configuration via Windows registry
   - `ThreadedScheduler` - Threading-based periodic scheduler
 - **Persistence**:
   - `JsonConfigRepository` - stores config in [config.json](config.json)
@@ -198,11 +209,12 @@ def test_example(mock_http_checker, mock_config_repository):
 
 ## Important Notes
 
-- **Windows-only**: Uses `winsound`, `pywinauto`, and `win32` APIs
+- **Windows-only**: Uses `winsound`, `pywinauto`, and `win32` APIs (registry, COM)
 - **Thread Safety**: Alert pop-ups are scheduled on main thread using tkinter's `after()` method
 - **Immutability**: Value objects (like `URL`) are frozen dataclasses
 - **No Framework Dependencies in Core**: Core layer has zero external dependencies
 - **Legacy Version**: [index.py](index.py) contains the original monolithic implementation for reference
+- **Distribution**: Use [build.bat](build.bat) or PyInstaller with [FocusMonitor.spec](FocusMonitor.spec) to create standalone executable
 
 ## Related Documentation
 
