@@ -1,8 +1,23 @@
 {
-    "websites": [
-        "https://x.com/",
-        "https://facebook",
-        "https://www.facebook.com/"
+    "targets": [
+        {
+            "id": "55eea1c0-1f00-4b7f-b421-1afb843c9b49",
+            "name": "Spotify",
+            "url": "https://open.spotify.com",
+            "process_name": "spotify.exe"
+        },
+        {
+            "id": "26e14211-9f82-43c1-a84e-f8b6c0744150",
+            "name": "Netflix",
+            "url": "https://netflix.com",
+            "process_name": "netflix.exe"
+        },
+        {
+            "id": "0f2607bf-1bb6-48b4-a6b3-c19d8266621b",
+            "name": "Facebook",
+            "url": "https://facebook.com",
+            "process_name": null
+        }
     ],
     "monitoring_interval": 1
 }

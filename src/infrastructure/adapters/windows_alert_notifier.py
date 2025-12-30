@@ -137,6 +137,128 @@ class WindowsAlertNotifier(IAlertNotifier):
 
         alert_window.after(5000, close_and_remove)
 
+    def notify(self, name: str) -> None:
+        """
+        Send an alert notification for a target (V2 unified interface).
+
+        Args:
+            name: Name of the target that triggered the alert
+        """
+        # Play sound
+        self._play_alert_sound()
+
+        # Show popup (must be done in main thread)
+        if self.parent_window:
+            try:
+                self.parent_window.after(
+                    0,
+                    lambda: self._show_popup_alert_v2(name)
+                )
+            except:
+                pass
+
+    def clear(self, name: str) -> None:
+        """
+        Clear all active alerts for a specific target (V2 unified interface).
+
+        Args:
+            name: Name of the target to clear alerts for
+        """
+        if name in self.active_popups:
+            for popup in self.active_popups[name][:]:
+                try:
+                    if popup.winfo_exists():
+                        popup.destroy()
+                except:
+                    pass
+            self.active_popups[name] = []
+
+    def _show_popup_alert_v2(self, name: str) -> None:
+        """
+        Display a pop-up alert window for V2 unified targets.
+
+        Args:
+            name: Target name to display in alert
+        """
+        alert_window = tk.Toplevel(self.parent_window) if self.parent_window else tk.Tk()
+        alert_window.title("TARGET ACTIVE ALERT")
+        alert_window.geometry("400x150")
+        alert_window.configure(bg='#ff4444')
+
+        # FORCE FOCUS - Steal attention from current application
+        alert_window.attributes('-topmost', True)
+        alert_window.attributes('-toolwindow', False)  # Show in taskbar
+        alert_window.lift()
+        alert_window.focus_force()
+        alert_window.grab_set()  # Modal - block interaction with other windows
+
+        # Additional focus forcing for Windows
+        try:
+            alert_window.focus()
+            alert_window.grab_set_global()  # Global modal
+        except:
+            pass
+
+        # Alert message
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        message = f"ALERT: Target is ACTIVE!\n\n{name}\n\nDetected at: {timestamp}"
+
+        label = tk.Label(
+            alert_window,
+            text=message,
+            font=('Arial', 12, 'bold'),
+            bg='#ff4444',
+            fg='white',
+            pady=20
+        )
+        label.pack()
+
+        # Close button - release grab before destroying
+        def close_alert():
+            try:
+                alert_window.grab_release()
+            except:
+                pass
+            alert_window.destroy()
+
+        close_btn = tk.Button(
+            alert_window,
+            text="ACKNOWLEDGE",
+            command=close_alert,
+            font=('Arial', 10, 'bold'),
+            bg='white',
+            fg='#ff4444',
+            padx=20,
+            pady=5
+        )
+        close_btn.pack(pady=10)
+
+        # Track this popup
+        if name not in self.active_popups:
+            self.active_popups[name] = []
+        self.active_popups[name].append(alert_window)
+
+        # Auto-close after 2 seconds and remove from tracking
+        # (shorter time since alerts are now continuous)
+        def close_and_remove():
+            try:
+                alert_window.grab_release()
+            except:
+                pass
+            try:
+                if alert_window.winfo_exists():
+                    alert_window.destroy()
+            except:
+                pass
+            finally:
+                if name in self.active_popups:
+                    try:
+                        self.active_popups[name].remove(alert_window)
+                    except ValueError:
+                        pass
+
+        alert_window.after(2000, close_and_remove)  # 2 seconds instead of 5
+
     @staticmethod
     def _play_alert_sound() -> None:
         """

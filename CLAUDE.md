@@ -4,14 +4,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Website Monitor with Focus Alert System - A Python desktop application that monitors websites and generates alerts when they are both HTTP-reachable AND open in browser tabs. Built with Clean Architecture principles.
+**Unified Website & Application Monitor** - A Python desktop application that monitors both websites AND desktop applications, generating alerts when they are active. Built with Clean Architecture principles.
 
-**Platform**: Windows-only (uses winsound, pywinauto, win32 APIs for browser detection)
+**Platform**: Windows-only (uses winsound, pywinauto, win32 APIs for browser detection and process monitoring)
+
+**Current Version**: V2 (Unified) - Single-input interface with auto-detection
+- V1 (`main.py`): Original website-only monitoring
+- **V2 (`main_v2.py`)**: Unified website + application monitoring [ACTIVE VERSION]
 
 ## Development Commands
 
 ### Running the Application
 ```bash
+# V2 (Unified - RECOMMENDED)
+python main_v2.py
+
+# V1 (Legacy - website only)
 python main.py
 ```
 
@@ -216,8 +224,68 @@ def test_example(mock_http_checker, mock_config_repository):
 - **Legacy Version**: [index.py](index.py) contains the original monolithic implementation for reference
 - **Distribution**: Use [build.bat](build.bat) or PyInstaller with [FocusMonitor.spec](FocusMonitor.spec) to create standalone executable
 
+## V2 Unified Architecture (CURRENT)
+
+The V2 system implements **unified monitoring** where a single target can monitor website, application, or both.
+
+### Key V2 Components
+
+**Core Layer**:
+- `MonitoringTarget` - Unified entity with optional URL and process_name
+- `MonitoringSessionV2` - Manages collection of unified targets
+- `TargetResolver` - Auto-resolves names (e.g., "Netflix") to URL + process name
+- `ProcessName` - Value object for Windows process names
+
+**Application Layer**:
+- `AddTargetUseCase` - Add unified targets
+- `CheckTargetsUseCase` - Check BOTH website and application status (OR logic)
+- `StartMonitoringV2UseCase` - Start unified monitoring
+- `StopMonitoringV2UseCase` - Stop unified monitoring
+
+**Infrastructure Layer**:
+- `WindowsProcessDetector` - Detect running Windows processes (uses psutil)
+- `JsonConfigRepositoryV2` - Persist unified targets with backward compatibility
+- `WindowsBrowserDetector` - Detect browser tabs (unchanged from V1)
+
+**Presentation Layer**:
+- `UnifiedMonitorGUI` (gui_v2.py) - Single input field interface
+
+### V2 Alert Logic
+
+Alerts trigger when **EITHER** condition is met (OR logic):
+1. Website is HTTP-reachable AND open in browser tab, **OR**
+2. Application process is running
+
+### V2 Auto-Resolution
+
+TargetResolver maps simple names to monitoring configuration:
+```python
+"Netflix" -> URL("netflix.com") + ProcessName("Netflix.exe")
+"Calculator" -> None + ProcessName("calc.exe")
+"Google" -> URL("google.com") + None
+```
+
+Pre-configured knowledge of 40+ popular services (streaming, social media, productivity, gaming, etc.)
+
+### V2 Config Format
+
+```json
+{
+  "targets": [
+    {
+      "id": "uuid",
+      "name": "Netflix",
+      "url": "https://netflix.com",
+      "process_name": "netflix.exe"
+    }
+  ],
+  "monitoring_interval": 10
+}
+```
+
 ## Related Documentation
 
+- [UNIFIED_V2_GUIDE.md](UNIFIED_V2_GUIDE.md) - **V2 usage guide and architecture**
 - [ARCHITECTURE.md](ARCHITECTURE.md) - Detailed architecture guide with examples
 - [README.md](README.md) - User-facing documentation
 - [IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md) - Migration summary

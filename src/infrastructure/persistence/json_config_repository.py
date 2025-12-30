@@ -6,6 +6,7 @@ from typing import Dict, Any
 from ...application.interfaces.config_repository import IConfigRepository
 from ...core.entities.monitoring_session import MonitoringSession
 from ...core.value_objects.url import URL
+from ...core.value_objects.process_name import ProcessName
 
 
 @dataclass
@@ -75,10 +76,17 @@ class JsonConfigRepository(IConfigRepository):
             session: MonitoringSession to convert
 
         Returns:
-            Dictionary representation
+            Dictionary representation with websites and applications
         """
         return {
             "websites": [str(website.url) for website in session.get_all_websites()],
+            "applications": [
+                {
+                    "process_name": str(app.process_name),
+                    "display_name": app.display_name
+                }
+                for app in session.get_all_applications()
+            ],
             "monitoring_interval": session.monitoring_interval
         }
 
@@ -90,13 +98,13 @@ class JsonConfigRepository(IConfigRepository):
             data: Dictionary from JSON
 
         Returns:
-            MonitoringSession instance
+            MonitoringSession instance with websites and applications
         """
         # Create session with interval
         interval = data.get("monitoring_interval", 10)
         session = MonitoringSession(monitoring_interval=interval)
 
-        # Add websites
+        # Add websites (backward compatible)
         websites = data.get("websites", [])
         for url_string in websites:
             try:
@@ -104,6 +112,17 @@ class JsonConfigRepository(IConfigRepository):
                 session.add_website(url)
             except ValueError as e:
                 print(f"Skipping invalid URL {url_string}: {e}")
+                continue
+
+        # Add applications (new feature)
+        applications = data.get("applications", [])
+        for app_data in applications:
+            try:
+                process_name = ProcessName(app_data["process_name"])
+                display_name = app_data.get("display_name", "")
+                session.add_application(process_name, display_name)
+            except (ValueError, KeyError) as e:
+                print(f"Skipping invalid application {app_data}: {e}")
                 continue
 
         return session
