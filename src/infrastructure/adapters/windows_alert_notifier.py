@@ -3,9 +3,32 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, List, Optional
 import tkinter as tk
+from tkinter import font as tkfont
 import winsound
+import random
 from ...application.interfaces.alert_notifier import IAlertNotifier
 from ...core.value_objects.url import URL
+from .camera_manager import CameraManager
+
+
+# Motivational messages for alerts (Zordon-style)
+MOTIVATIONAL_MESSAGES = [
+    "Don't waste your time, come back to your work!",
+    "Focus on your mission, productivity awaits!",
+    "The path to success requires discipline!",
+    "Your goals won't achieve themselves!",
+    "Time to return to productivity, champion!",
+    "Remember why you started this journey!",
+    "Every second counts towards your success!",
+    "Your future self will thank you for focusing now!",
+    "Discipline today creates freedom tomorrow!",
+    "Stop procrastinating, start accomplishing!",
+    "Your dreams require action, not distraction!",
+    "Winners focus on what matters!",
+    "Greatness demands your full attention!",
+    "The work won't do itself!",
+    "Choose progress over procrastination!",
+]
 
 
 @dataclass
@@ -16,12 +39,16 @@ class WindowsAlertNotifier(IAlertNotifier):
     This is an infrastructure adapter that implements the IAlertNotifier
     interface using tkinter pop-ups and winsound alerts for Windows.
 
+    Features retro Zordon-style alerts with live camera feed.
+
     Attributes:
         parent_window: Parent tkinter window for alerts
         active_popups: Dictionary tracking active popup windows per URL
+        camera_manager: Singleton camera manager for webcam access
     """
     parent_window: Optional[tk.Tk] = None
     active_popups: Dict[str, List] = field(default_factory=dict)
+    camera_manager: CameraManager = field(default_factory=CameraManager)
 
     def send_alert(self, url: URL) -> None:
         """
@@ -175,43 +202,99 @@ class WindowsAlertNotifier(IAlertNotifier):
 
     def _show_popup_alert_v2(self, name: str) -> None:
         """
-        Display a pop-up alert window for V2 unified targets.
+        Display a ZORDON-STYLE retro alert with live camera as FULLSCREEN background.
 
         Args:
             name: Target name to display in alert
         """
         alert_window = tk.Toplevel(self.parent_window) if self.parent_window else tk.Tk()
-        alert_window.title("TARGET ACTIVE ALERT")
-        alert_window.geometry("400x150")
-        alert_window.configure(bg='#ff4444')
+        alert_window.title("⚡ ZORDON ALERT SYSTEM ⚡")
+        alert_window.geometry("600x500")
+        alert_window.resizable(False, False)
+
+        # Try to get camera background
+        camera_bg = None
+        try:
+            print("[ALERT] Requesting camera background...")
+            camera_bg = self.camera_manager.get_fullscreen_background_for_tk(width=600, height=500)
+            if camera_bg:
+                print("[ALERT] Camera background received!")
+            else:
+                print("[ALERT] Camera background is None")
+        except Exception as e:
+            print(f"[ALERT] Camera error: {e}")
+            import traceback
+            traceback.print_exc()
+
+        # Create background label
+        if camera_bg:
+            # Camera background (YOUR FACE fills the whole screen!)
+            bg_label = tk.Label(alert_window, image=camera_bg)
+            bg_label.image = camera_bg  # Keep reference
+            bg_label.place(x=0, y=0, relwidth=1, relheight=1)
+        else:
+            # Fallback: solid background
+            alert_window.configure(bg='#0a0a1a')
 
         # FORCE FOCUS - Steal attention from current application
         alert_window.attributes('-topmost', True)
-        alert_window.attributes('-toolwindow', False)  # Show in taskbar
+        alert_window.attributes('-toolwindow', False)
         alert_window.lift()
         alert_window.focus_force()
-        alert_window.grab_set()  # Modal - block interaction with other windows
+        alert_window.grab_set()
 
-        # Additional focus forcing for Windows
         try:
             alert_window.focus()
-            alert_window.grab_set_global()  # Global modal
+            alert_window.grab_set_global()
         except:
             pass
 
-        # Alert message
+        # Random motivational message
+        message = random.choice(MOTIVATIONAL_MESSAGES)
         timestamp = datetime.now().strftime("%H:%M:%S")
-        message = f"ALERT: Target is ACTIVE!\n\n{name}\n\nDetected at: {timestamp}"
 
-        label = tk.Label(
-            alert_window,
+        # Message in the CENTER - OVERLAY on camera (your face!)
+        message_frame = tk.Frame(alert_window, bg='#000000', highlightbackground='#00ff00',
+                                highlightthickness=4)
+        message_frame.place(relx=0.5, rely=0.5, anchor='center', width=520)
+
+        message_label = tk.Label(
+            message_frame,
             text=message,
-            font=('Arial', 12, 'bold'),
-            bg='#ff4444',
-            fg='white',
-            pady=20
+            font=('Courier New', 16, 'bold'),
+            bg='#000000',
+            fg='#00ff00',
+            wraplength=480,
+            justify=tk.CENTER,
+            pady=25,
+            padx=20
         )
-        label.pack()
+        message_label.pack()
+
+        # Info bar at bottom - OVERLAY on camera
+        info_frame = tk.Frame(alert_window, bg='#000000', highlightbackground='#ff0000',
+                             highlightthickness=3)
+        info_frame.place(relx=0.5, rely=0.75, anchor='center', width=450)
+
+        target_label = tk.Label(
+            info_frame,
+            text=f"⚠️ TARGET: {name} ⚠️",
+            font=('Courier New', 14, 'bold'),
+            bg='#000000',
+            fg='#ff0000',
+            pady=5
+        )
+        target_label.pack()
+
+        time_label = tk.Label(
+            info_frame,
+            text=f"TIME: {timestamp}",
+            font=('Courier New', 11),
+            bg='#000000',
+            fg='#00ff00',
+            pady=3
+        )
+        time_label.pack()
 
         # Close button - release grab before destroying
         def close_alert():
@@ -221,43 +304,50 @@ class WindowsAlertNotifier(IAlertNotifier):
                 pass
             alert_window.destroy()
 
+        # Button at bottom - OVERLAY on camera
+        button_frame = tk.Frame(alert_window, bg='#000000')
+        button_frame.place(relx=0.5, rely=0.92, anchor='center')
+
         close_btn = tk.Button(
-            alert_window,
-            text="ACKNOWLEDGE",
+            button_frame,
+            text="⚡ ACKNOWLEDGE & RETURN TO WORK ⚡",
             command=close_alert,
-            font=('Arial', 10, 'bold'),
-            bg='white',
-            fg='#ff4444',
-            padx=20,
-            pady=5
+            font=('Courier New', 13, 'bold'),
+            bg='#00ff00',
+            fg='#000000',
+            activebackground='#00cc00',
+            activeforeground='#000000',
+            padx=25,
+            pady=12,
+            relief=tk.RAISED,
+            bd=5,
+            cursor='hand2'
         )
-        close_btn.pack(pady=10)
+        close_btn.pack()
 
         # Track this popup
         if name not in self.active_popups:
             self.active_popups[name] = []
         self.active_popups[name].append(alert_window)
 
-        # Auto-close after 2 seconds and remove from tracking
-        # (shorter time since alerts are now continuous)
-        def close_and_remove():
+        # Cleanup handler when window is closed manually
+        def on_window_close():
             try:
                 alert_window.grab_release()
             except:
                 pass
+            if name in self.active_popups:
+                try:
+                    self.active_popups[name].remove(alert_window)
+                except ValueError:
+                    pass
             try:
-                if alert_window.winfo_exists():
-                    alert_window.destroy()
+                alert_window.destroy()
             except:
                 pass
-            finally:
-                if name in self.active_popups:
-                    try:
-                        self.active_popups[name].remove(alert_window)
-                    except ValueError:
-                        pass
 
-        alert_window.after(2000, close_and_remove)  # 2 seconds instead of 5
+        # Bind close event
+        alert_window.protocol("WM_DELETE_WINDOW", on_window_close)
 
     @staticmethod
     def _play_alert_sound() -> None:
