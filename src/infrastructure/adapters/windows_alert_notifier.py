@@ -218,15 +218,22 @@ class WindowsAlertNotifier(IAlertNotifier):
         # Random motivational message
         message = random.choice(MOTIVATIONAL_MESSAGES)
 
-        # Background label (will be updated with animated frames)
+        # Start camera for LIVE feed on each alert
+        self.camera_manager.start_camera()
+
+        # Background label (will be updated with LIVE camera frames)
         bg_label = tk.Label(alert_window)
         bg_label.place(x=0, y=0, relwidth=1, relheight=1)
 
         # Animation control
         animation_running = {'value': True}
 
-        def update_avatar_frame():
-            """Update avatar frame for animation (15 FPS)."""
+        # TTS control - create NEW TTS instance for EACH alert
+        from src.infrastructure.adapters.windows_tts_service import WindowsTTSService
+        alert_tts = WindowsTTSService()
+
+        def update_live_camera_frame():
+            """Update with LIVE camera frame (15 FPS)."""
             if not animation_running['value']:
                 return
 
@@ -234,45 +241,42 @@ class WindowsAlertNotifier(IAlertNotifier):
             try:
                 if not alert_window.winfo_exists():
                     animation_running['value'] = False
+                    self.camera_manager.stop_camera()
                     return
             except:
                 animation_running['value'] = False
+                self.camera_manager.stop_camera()
                 return
 
             try:
-                if self.avatar_animator:
-                    # Get animated avatar frame
-                    avatar_frame = self.avatar_animator.get_current_frame_for_tk(width=600, height=500)
-                    if avatar_frame:
-                        bg_label.configure(image=avatar_frame)
-                        bg_label.image = avatar_frame  # Keep reference
-                else:
-                    # Fallback to static camera
-                    camera_bg = self.camera_manager.get_fullscreen_background_for_tk(width=600, height=500)
-                    if camera_bg:
-                        bg_label.configure(image=camera_bg)
-                        bg_label.image = camera_bg
+                # Get LIVE camera frame with Zordon effect
+                camera_bg = self.camera_manager.get_fullscreen_background_for_tk(width=600, height=500)
+                if camera_bg:
+                    bg_label.configure(image=camera_bg)
+                    bg_label.image = camera_bg  # Keep reference
 
                 # Schedule next frame (15 FPS = 67ms)
                 if animation_running['value'] and alert_window.winfo_exists():
-                    alert_window.after(67, update_avatar_frame)
+                    alert_window.after(67, update_live_camera_frame)
 
             except tk.TclError:
-                # Window was destroyed during update - stop animation silently
+                # Window was destroyed during update - stop camera silently
                 animation_running['value'] = False
+                self.camera_manager.stop_camera()
             except Exception as e:
                 print(f"[ALERT] Unexpected error: {e}")
                 animation_running['value'] = False
+                self.camera_manager.stop_camera()
 
-        # Start TTS FIRST (before animation loop)
-        if self.avatar_animator:
-            try:
-                self.avatar_animator.start_speaking(message)
-            except Exception as e:
-                print(f"[ALERT] TTS error: {e}")
+        # Start TTS for THIS alert (new instance each time)
+        try:
+            print(f"[ALERT] Starting TTS: {message}")
+            alert_tts.speak(message, blocking=False)
+        except Exception as e:
+            print(f"[ALERT] TTS error: {e}")
 
-        # Start animation loop
-        update_avatar_frame()
+        # Start LIVE camera animation loop
+        update_live_camera_frame()
 
         # FORCE FOCUS - Steal attention from current application
         alert_window.attributes('-topmost', True)
@@ -333,17 +337,22 @@ class WindowsAlertNotifier(IAlertNotifier):
         )
         time_label.pack()
 
-        # Close button - stop animation and TTS, then destroy
+        # Close button - stop animation, camera, and TTS, then destroy
         def close_alert():
             # Stop animation loop
             animation_running['value'] = False
 
-            # Stop TTS if speaking
-            if self.avatar_animator:
-                try:
-                    self.avatar_animator.stop_animation()
-                except:
-                    pass
+            # Stop camera
+            try:
+                self.camera_manager.stop_camera()
+            except:
+                pass
+
+            # Stop TTS
+            try:
+                alert_tts.stop()
+            except:
+                pass
 
             # Release grab and destroy
             try:
@@ -380,13 +389,20 @@ class WindowsAlertNotifier(IAlertNotifier):
 
         # Cleanup handler when window is closed manually
         def on_window_close():
-            # Stop animation and TTS
+            # Stop animation
             animation_running['value'] = False
-            if self.avatar_animator:
-                try:
-                    self.avatar_animator.stop_animation()
-                except:
-                    pass
+
+            # Stop camera
+            try:
+                self.camera_manager.stop_camera()
+            except:
+                pass
+
+            # Stop TTS
+            try:
+                alert_tts.stop()
+            except:
+                pass
 
             # Release grab
             try:
