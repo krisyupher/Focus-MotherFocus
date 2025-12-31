@@ -1,4 +1,5 @@
 """Unified Monitor GUI - Single interface for website + application monitoring"""
+import os
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
 from typing import Optional
@@ -8,6 +9,7 @@ from src.application.use_cases.remove_target import RemoveTargetUseCase
 from src.application.use_cases.check_targets import CheckTargetsUseCase
 from src.application.use_cases.start_monitoring import StartMonitoringUseCase
 from src.application.use_cases.stop_monitoring import StopMonitoringUseCase
+from src.application.use_cases.generate_avatar import GenerateAvatarUseCase
 from src.infrastructure.adapters.windows_startup_manager import WindowsStartupManager
 
 
@@ -31,6 +33,7 @@ class UnifiedMonitorGUI:
         start_monitoring_use_case: StartMonitoringUseCase,
         stop_monitoring_use_case: StopMonitoringUseCase,
         check_targets_use_case: CheckTargetsUseCase,
+        generate_avatar_use_case: GenerateAvatarUseCase,
         startup_manager: WindowsStartupManager,
         root: tk.Tk
     ):
@@ -40,6 +43,7 @@ class UnifiedMonitorGUI:
         self._start_monitoring = start_monitoring_use_case
         self._stop_monitoring = stop_monitoring_use_case
         self._check_targets = check_targets_use_case
+        self._generate_avatar = generate_avatar_use_case
         self._startup_manager = startup_manager
         self._root = root
 
@@ -78,9 +82,12 @@ class UnifiedMonitorGUI:
         # Control Section
         self._create_control_section(main_frame)
 
+        # Avatar Section
+        self._create_avatar_section(main_frame)
+
         # Status bar
         self._status_label = ttk.Label(main_frame, text="Ready", relief=tk.SUNKEN)
-        self._status_label.grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(10, 0))
+        self._status_label.grid(row=5, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(10, 0))
 
     def _create_add_target_section(self, parent):
         """Create the add target input section - SIMPLE VERSION."""
@@ -188,6 +195,92 @@ class UnifiedMonitorGUI:
             command=self._on_toggle_autostart
         )
         autostart_check.pack(side=tk.RIGHT)
+
+    def _create_avatar_section(self, parent):
+        """Create the avatar management section."""
+        frame = ttk.LabelFrame(parent, text="🎭 Speaking Avatar Settings", padding="10")
+        frame.grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(10, 0))
+
+        # Avatar status
+        self._avatar_status_label = ttk.Label(
+            frame,
+            text="Avatar: Checking...",
+            foreground="#666666"
+        )
+        self._avatar_status_label.pack(side=tk.LEFT, padx=(0, 20))
+
+        # Regenerate button
+        self._regen_avatar_btn = ttk.Button(
+            frame,
+            text="📷 Generate/Regenerate Avatar",
+            command=self._on_regenerate_avatar
+        )
+        self._regen_avatar_btn.pack(side=tk.LEFT, padx=(0, 10))
+
+        # Info label
+        info_label = ttk.Label(
+            frame,
+            text="Avatar speaks motivational messages when you procrastinate",
+            foreground="#666666",
+            font=("Segoe UI", 9)
+        )
+        info_label.pack(side=tk.RIGHT)
+
+        # Update status on init
+        self._update_avatar_status()
+
+    def _update_avatar_status(self):
+        """Update avatar status label."""
+        if os.path.exists("config/avatar.png"):
+            self._avatar_status_label.config(
+                text="✓ Avatar Active",
+                foreground="#00aa00"
+            )
+        else:
+            self._avatar_status_label.config(
+                text="⚠ No Avatar",
+                foreground="#cc0000"
+            )
+
+    def _on_regenerate_avatar(self):
+        """Handle regenerate avatar button click."""
+        if messagebox.askyesno(
+            "Generate Avatar",
+            "This will capture your face from the webcam.\n\n"
+            "Please ensure:\n"
+            "• Camera is connected\n"
+            "• You are facing the camera\n"
+            "• Lighting is adequate\n\n"
+            "Ready to capture?"
+        ):
+            try:
+                self._set_status("Capturing avatar... Please face the camera")
+                self._regen_avatar_btn.config(state=tk.DISABLED)
+
+                success = self._generate_avatar.execute(max_attempts=30, timeout_seconds=30)
+
+                if success:
+                    self._update_avatar_status()
+                    self._set_status("Avatar generated successfully!")
+                    messagebox.showinfo("Success", "Avatar captured successfully!\n\nYour face will appear in alerts.")
+                else:
+                    self._set_status("Avatar generation failed")
+                    messagebox.showerror(
+                        "Face Detection Failed",
+                        "Could not detect your face.\n\n"
+                        "Please ensure:\n"
+                        "• Camera is working\n"
+                        "• You are facing the camera\n"
+                        "• Lighting is good\n\n"
+                        "Try again?"
+                    )
+
+            except Exception as e:
+                self._set_status(f"Avatar generation error: {e}")
+                messagebox.showerror("Error", f"Failed to generate avatar:\n{e}")
+
+            finally:
+                self._regen_avatar_btn.config(state=tk.NORMAL)
 
     def _on_add_target(self):
         """Handle add target button click - AUTO-RESOLVE version."""

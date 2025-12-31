@@ -9,6 +9,7 @@ import random
 from ...application.interfaces.alert_notifier import IAlertNotifier
 from ...core.value_objects.url import URL
 from .camera_manager import CameraManager
+from .avatar_animator import AvatarAnimator
 
 
 # Motivational messages for alerts (Zordon-style)
@@ -39,16 +40,18 @@ class WindowsAlertNotifier(IAlertNotifier):
     This is an infrastructure adapter that implements the IAlertNotifier
     interface using tkinter pop-ups and winsound alerts for Windows.
 
-    Features retro Zordon-style alerts with live camera feed.
+    Features retro Zordon-style alerts with animated avatar and TTS.
 
     Attributes:
         parent_window: Parent tkinter window for alerts
         active_popups: Dictionary tracking active popup windows per URL
-        camera_manager: Singleton camera manager for webcam access
+        camera_manager: Singleton camera manager for webcam access (fallback)
+        avatar_animator: Optional avatar animator for speaking alerts
     """
     parent_window: Optional[tk.Tk] = None
     active_popups: Dict[str, List] = field(default_factory=dict)
     camera_manager: CameraManager = field(default_factory=CameraManager)
+    avatar_animator: Optional[AvatarAnimator] = None
 
     def send_alert(self, url: URL) -> None:
         """
@@ -202,7 +205,7 @@ class WindowsAlertNotifier(IAlertNotifier):
 
     def _show_popup_alert_v2(self, name: str) -> None:
         """
-        Display a ZORDON-STYLE retro alert with live camera as FULLSCREEN background.
+        Display a ZORDON-STYLE retro alert with ANIMATED AVATAR and TTS.
 
         Args:
             name: Target name to display in alert
@@ -212,29 +215,64 @@ class WindowsAlertNotifier(IAlertNotifier):
         alert_window.geometry("600x500")
         alert_window.resizable(False, False)
 
-        # Try to get camera background
-        camera_bg = None
-        try:
-            print("[ALERT] Requesting camera background...")
-            camera_bg = self.camera_manager.get_fullscreen_background_for_tk(width=600, height=500)
-            if camera_bg:
-                print("[ALERT] Camera background received!")
-            else:
-                print("[ALERT] Camera background is None")
-        except Exception as e:
-            print(f"[ALERT] Camera error: {e}")
-            import traceback
-            traceback.print_exc()
+        # Random motivational message
+        message = random.choice(MOTIVATIONAL_MESSAGES)
 
-        # Create background label
-        if camera_bg:
-            # Camera background (YOUR FACE fills the whole screen!)
-            bg_label = tk.Label(alert_window, image=camera_bg)
-            bg_label.image = camera_bg  # Keep reference
-            bg_label.place(x=0, y=0, relwidth=1, relheight=1)
-        else:
-            # Fallback: solid background
-            alert_window.configure(bg='#0a0a1a')
+        # Background label (will be updated with animated frames)
+        bg_label = tk.Label(alert_window)
+        bg_label.place(x=0, y=0, relwidth=1, relheight=1)
+
+        # Animation control
+        animation_running = {'value': True}
+
+        def update_avatar_frame():
+            """Update avatar frame for animation (15 FPS)."""
+            if not animation_running['value']:
+                return
+
+            # Check if window still exists before updating
+            try:
+                if not alert_window.winfo_exists():
+                    animation_running['value'] = False
+                    return
+            except:
+                animation_running['value'] = False
+                return
+
+            try:
+                if self.avatar_animator:
+                    # Get animated avatar frame
+                    avatar_frame = self.avatar_animator.get_current_frame_for_tk(width=600, height=500)
+                    if avatar_frame:
+                        bg_label.configure(image=avatar_frame)
+                        bg_label.image = avatar_frame  # Keep reference
+                else:
+                    # Fallback to static camera
+                    camera_bg = self.camera_manager.get_fullscreen_background_for_tk(width=600, height=500)
+                    if camera_bg:
+                        bg_label.configure(image=camera_bg)
+                        bg_label.image = camera_bg
+
+                # Schedule next frame (15 FPS = 67ms)
+                if animation_running['value'] and alert_window.winfo_exists():
+                    alert_window.after(67, update_avatar_frame)
+
+            except tk.TclError:
+                # Window was destroyed during update - stop animation silently
+                animation_running['value'] = False
+            except Exception as e:
+                print(f"[ALERT] Unexpected error: {e}")
+                animation_running['value'] = False
+
+        # Start TTS FIRST (before animation loop)
+        if self.avatar_animator:
+            try:
+                self.avatar_animator.start_speaking(message)
+            except Exception as e:
+                print(f"[ALERT] TTS error: {e}")
+
+        # Start animation loop
+        update_avatar_frame()
 
         # FORCE FOCUS - Steal attention from current application
         alert_window.attributes('-topmost', True)
@@ -249,8 +287,7 @@ class WindowsAlertNotifier(IAlertNotifier):
         except:
             pass
 
-        # Random motivational message
-        message = random.choice(MOTIVATIONAL_MESSAGES)
+        # Timestamp
         timestamp = datetime.now().strftime("%H:%M:%S")
 
         # Message in the CENTER - OVERLAY on camera (your face!)
@@ -296,8 +333,19 @@ class WindowsAlertNotifier(IAlertNotifier):
         )
         time_label.pack()
 
-        # Close button - release grab before destroying
+        # Close button - stop animation and TTS, then destroy
         def close_alert():
+            # Stop animation loop
+            animation_running['value'] = False
+
+            # Stop TTS if speaking
+            if self.avatar_animator:
+                try:
+                    self.avatar_animator.stop_animation()
+                except:
+                    pass
+
+            # Release grab and destroy
             try:
                 alert_window.grab_release()
             except:
@@ -332,15 +380,28 @@ class WindowsAlertNotifier(IAlertNotifier):
 
         # Cleanup handler when window is closed manually
         def on_window_close():
+            # Stop animation and TTS
+            animation_running['value'] = False
+            if self.avatar_animator:
+                try:
+                    self.avatar_animator.stop_animation()
+                except:
+                    pass
+
+            # Release grab
             try:
                 alert_window.grab_release()
             except:
                 pass
+
+            # Remove from tracking
             if name in self.active_popups:
                 try:
                     self.active_popups[name].remove(alert_window)
                 except ValueError:
                     pass
+
+            # Destroy window
             try:
                 alert_window.destroy()
             except:

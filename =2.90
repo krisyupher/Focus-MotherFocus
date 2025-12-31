@@ -1,0 +1,12 @@
+Defaulting to user installation because normal site-packages is not writeable
+Collecting pyttsx3
+  Downloading pyttsx3-2.99-py3-none-any.whl.metadata (6.2 kB)
+Requirement already satisfied: comtypes in c:\users\crist\appdata\local\packages\pythonsoftwarefoundation.python.3.13_qbz5n2kfra8p0\localcache\local-packages\python313\site-packages (from pyttsx3) (1.4.14)
+Collecting pypiwin32 (from pyttsx3)
+  Downloading pypiwin32-223-py3-none-any.whl.metadata (236 bytes)
+Requirement already satisfied: pywin32 in c:\users\crist\appdata\local\packages\pythonsoftwarefoundation.python.3.13_qbz5n2kfra8p0\localcache\local-packages\python313\site-packages (from pyttsx3) (310)
+Downloading pyttsx3-2.99-py3-none-any.whl (32 kB)
+Downloading pypiwin32-223-py3-none-any.whl (1.7 kB)
+Installing collected packages: pypiwin32, pyttsx3
+
+Successfully installed pypiwin32-223 pyttsx3-2.99
