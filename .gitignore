@@ -131,3 +131,18 @@ dmypy.json
 # OS
 .DS_Store
 Thumbs.db
+
+# Node modules (if any MCP testing)
+node_modules/
+package-lock.json
+
+# Config files (contains monitoring targets)
+config.json
+
+# Build output
+build/
+dist/
+
+# Temporary/debug files
+nul
+*.tmp

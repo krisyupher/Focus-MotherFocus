@@ -1,4 +1,4 @@
-"""Camera Manager for capturing live webcam feed."""
+"""Camera Manager for capturing live webcam feed with animated avatar support."""
 import cv2
 import numpy as np
 from PIL import Image, ImageTk
@@ -36,7 +36,17 @@ class CameraManager:
         self._is_active = False
         self._last_frame = None
         self._frame_lock = threading.Lock()
+        self._animated_avatar = None  # Will be set by alert notifier
         self._initialized = True
+
+    def set_animated_avatar(self, avatar):
+        """
+        Set the animated avatar for processing frames.
+
+        Args:
+            avatar: AnimatedAvatar instance
+        """
+        self._animated_avatar = avatar
 
     def start_camera(self) -> bool:
         """
@@ -158,13 +168,14 @@ class CameraManager:
             print(f"Failed to process frame: {e}")
             return None
 
-    def get_fullscreen_background_for_tk(self, width: int = 600, height: int = 500) -> Optional[ImageTk.PhotoImage]:
+    def get_fullscreen_background_for_tk(self, width: int = 600, height: int = 500, is_speaking: bool = False) -> Optional[ImageTk.PhotoImage]:
         """
-        Get a fullscreen camera frame for background (Zordon-style).
+        Get a fullscreen camera frame for background with animated avatar.
 
         Args:
             width: Width of the background in pixels
             height: Height of the background in pixels
+            is_speaking: Whether TTS is currently speaking (for mouth animation)
 
         Returns:
             ImageTk.PhotoImage ready for Tkinter background, or None if failed
@@ -177,27 +188,21 @@ class CameraManager:
         print(f"[CAMERA] Frame captured: {frame.shape}")
 
         try:
+            # Process frame with animated avatar if available
+            if self._animated_avatar is not None:
+                processed_frame = self._animated_avatar.process_frame(frame, is_speaking=is_speaking)
+                if processed_frame is not None:
+                    frame = processed_frame
+                    print("[CAMERA] Frame processed with animated avatar")
+
             # Convert BGR to RGB
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
             # Resize to fit window
             frame_resized = cv2.resize(frame_rgb, (width, height))
 
-            # Add heavy retro green tint (Zordon effect)
-            green_tint = np.zeros_like(frame_resized)
-            green_tint[:, :, 1] = 80  # Heavy green channel boost
-
-            # Apply tint with transparency
-            tinted_frame = cv2.addWeighted(frame_resized, 0.6, green_tint, 0.4, 0)
-
-            # Add slight blur for dreamy effect
-            blurred = cv2.GaussianBlur(tinted_frame, (5, 5), 0)
-
-            # Darken the frame a bit for text readability
-            darkened = cv2.convertScaleAbs(blurred, alpha=0.7, beta=0)
-
             # Convert to PIL Image
-            pil_image = Image.fromarray(darkened)
+            pil_image = Image.fromarray(frame_resized)
             print(f"[CAMERA] PIL Image created: {pil_image.size} {pil_image.mode}")
 
             # Convert to ImageTk for Tkinter

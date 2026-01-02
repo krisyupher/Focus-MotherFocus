@@ -1,5 +1,4 @@
 """Unified Monitor GUI - Single interface for website + application monitoring"""
-import os
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
 from typing import Optional
@@ -9,7 +8,6 @@ from src.application.use_cases.remove_target import RemoveTargetUseCase
 from src.application.use_cases.check_targets import CheckTargetsUseCase
 from src.application.use_cases.start_monitoring import StartMonitoringUseCase
 from src.application.use_cases.stop_monitoring import StopMonitoringUseCase
-from src.application.use_cases.generate_avatar import GenerateAvatarUseCase
 from src.infrastructure.adapters.windows_startup_manager import WindowsStartupManager
 
 
@@ -33,7 +31,6 @@ class UnifiedMonitorGUI:
         start_monitoring_use_case: StartMonitoringUseCase,
         stop_monitoring_use_case: StopMonitoringUseCase,
         check_targets_use_case: CheckTargetsUseCase,
-        generate_avatar_use_case: GenerateAvatarUseCase,
         startup_manager: WindowsStartupManager,
         root: tk.Tk
     ):
@@ -43,9 +40,17 @@ class UnifiedMonitorGUI:
         self._start_monitoring = start_monitoring_use_case
         self._stop_monitoring = stop_monitoring_use_case
         self._check_targets = check_targets_use_case
-        self._generate_avatar = generate_avatar_use_case
         self._startup_manager = startup_manager
         self._root = root
+
+        # Initialize AI command processor
+        self._ai_processor = None
+        try:
+            from src.infrastructure.adapters.ai_command_processor import AICommandProcessor
+            self._ai_processor = AICommandProcessor()
+            print("[GUI] AI Command Processor initialized")
+        except Exception as e:
+            print(f"[GUI] AI Command Processor not available: {e}")
 
         self._setup_window()
         self._create_widgets()
@@ -73,8 +78,9 @@ class UnifiedMonitorGUI:
         )
         title.grid(row=0, column=0, columnspan=2, pady=(0, 20))
 
-        # Add Target Section
-        self._create_add_target_section(main_frame)
+        # AI Command Section (if available)
+        if self._ai_processor:
+            self._create_ai_command_section(main_frame)
 
         # Target List Section
         self._create_target_list_section(main_frame)
@@ -82,17 +88,51 @@ class UnifiedMonitorGUI:
         # Control Section
         self._create_control_section(main_frame)
 
-        # Avatar Section
-        self._create_avatar_section(main_frame)
-
         # Status bar
         self._status_label = ttk.Label(main_frame, text="Ready", relief=tk.SUNKEN)
-        self._status_label.grid(row=5, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(10, 0))
+        self._status_label.grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(10, 0))
+
+    def _create_ai_command_section(self, parent):
+        """Create AI natural language command input section."""
+        frame = ttk.LabelFrame(parent, text="🤖 AI Assistant - Type Natural Language Commands", padding="10")
+        frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+
+        # Input frame
+        input_frame = ttk.Frame(frame)
+        input_frame.pack(fill=tk.X)
+
+        ttk.Label(input_frame, text="Command:", font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT, padx=(0, 10))
+
+        self._ai_entry = ttk.Entry(input_frame, width=50, font=("Segoe UI", 11))
+        self._ai_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
+        self._ai_entry.bind('<Return>', lambda e: self._on_ai_command())
+
+        ai_btn = ttk.Button(input_frame, text="🚀 Execute", command=self._on_ai_command)
+        ai_btn.pack(side=tk.LEFT)
+
+        # Examples
+        examples = ttk.Label(
+            frame,
+            text='Try: "Monitor Netflix and YouTube" • "Remove Facebook" • "Start monitoring" • "Show my targets"',
+            foreground="#0066cc",
+            font=("Segoe UI", 9)
+        )
+        examples.pack(pady=(10, 0))
+
+        # Response label
+        self._ai_response_label = ttk.Label(
+            frame,
+            text="",
+            foreground="#006600",
+            font=("Segoe UI", 9, "italic"),
+            wraplength=600
+        )
+        self._ai_response_label.pack(pady=(5, 0))
 
     def _create_add_target_section(self, parent):
         """Create the add target input section - SIMPLE VERSION."""
         frame = ttk.LabelFrame(parent, text="Add Target (auto-detects website + app)", padding="10")
-        frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+        frame.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
 
         # Simple single input
         input_frame = ttk.Frame(frame)
@@ -152,22 +192,12 @@ class UnifiedMonitorGUI:
         btn_frame = ttk.Frame(frame)
         btn_frame.pack(fill=tk.X, pady=(10, 0))
 
-        ttk.Button(btn_frame, text="🗑️ Remove Selected", command=self._on_remove_target).pack(side=tk.LEFT, padx=(0, 5))
         ttk.Button(btn_frame, text="🔄 Refresh", command=self._refresh_target_list).pack(side=tk.LEFT)
 
     def _create_control_section(self, parent):
         """Create the monitoring control section."""
         frame = ttk.LabelFrame(parent, text="Monitoring Controls", padding="10")
         frame.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E))
-
-        # Interval setting
-        ttk.Label(frame, text="Check Interval (seconds):").pack(side=tk.LEFT, padx=(0, 5))
-
-        self._interval_var = tk.StringVar(value=str(self._session.monitoring_interval))
-        interval_entry = ttk.Entry(frame, textvariable=self._interval_var, width=10)
-        interval_entry.pack(side=tk.LEFT, padx=(0, 10))
-
-        ttk.Button(frame, text="Set", command=self._on_set_interval).pack(side=tk.LEFT, padx=(0, 20))
 
         # Start/Stop buttons
         self._start_btn = ttk.Button(
@@ -196,91 +226,92 @@ class UnifiedMonitorGUI:
         )
         autostart_check.pack(side=tk.RIGHT)
 
-    def _create_avatar_section(self, parent):
-        """Create the avatar management section."""
-        frame = ttk.LabelFrame(parent, text="🎭 Speaking Avatar Settings", padding="10")
-        frame.grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(10, 0))
 
-        # Avatar status
-        self._avatar_status_label = ttk.Label(
-            frame,
-            text="Avatar: Checking...",
-            foreground="#666666"
-        )
-        self._avatar_status_label.pack(side=tk.LEFT, padx=(0, 20))
+    def _on_ai_command(self):
+        """Handle AI natural language command."""
+        if not self._ai_processor:
+            messagebox.showwarning("AI Not Available", "AI Command Processor is not configured")
+            return
 
-        # Regenerate button
-        self._regen_avatar_btn = ttk.Button(
-            frame,
-            text="📷 Generate/Regenerate Avatar",
-            command=self._on_regenerate_avatar
-        )
-        self._regen_avatar_btn.pack(side=tk.LEFT, padx=(0, 10))
+        command = self._ai_entry.get().strip()
+        if not command:
+            return
 
-        # Info label
-        info_label = ttk.Label(
-            frame,
-            text="Avatar speaks motivational messages when you procrastinate",
-            foreground="#666666",
-            font=("Segoe UI", 9)
-        )
-        info_label.pack(side=tk.RIGHT)
+        # Show processing
+        self._ai_response_label.config(text="🤔 Processing...", foreground="#666666")
+        self._root.update()
 
-        # Update status on init
-        self._update_avatar_status()
-
-    def _update_avatar_status(self):
-        """Update avatar status label."""
-        if os.path.exists("config/avatar.png"):
-            self._avatar_status_label.config(
-                text="✓ Avatar Active",
-                foreground="#00aa00"
-            )
-        else:
-            self._avatar_status_label.config(
-                text="⚠ No Avatar",
-                foreground="#cc0000"
+        try:
+            # Process command with AI
+            response = self._ai_processor.process_command_simple(
+                command,
+                add_target_fn=self._ai_add_target,
+                remove_target_fn=self._ai_remove_target,
+                start_monitoring_fn=self._ai_start_monitoring,
+                stop_monitoring_fn=self._ai_stop_monitoring,
+                list_targets_fn=self._ai_list_targets
             )
 
-    def _on_regenerate_avatar(self):
-        """Handle regenerate avatar button click."""
-        if messagebox.askyesno(
-            "Generate Avatar",
-            "This will capture your face from the webcam.\n\n"
-            "Please ensure:\n"
-            "• Camera is connected\n"
-            "• You are facing the camera\n"
-            "• Lighting is adequate\n\n"
-            "Ready to capture?"
-        ):
-            try:
-                self._set_status("Capturing avatar... Please face the camera")
-                self._regen_avatar_btn.config(state=tk.DISABLED)
+            # Show response
+            self._ai_response_label.config(text=f"✅ {response}", foreground="#006600")
 
-                success = self._generate_avatar.execute(max_attempts=30, timeout_seconds=30)
+            # Clear input
+            self._ai_entry.delete(0, tk.END)
 
-                if success:
-                    self._update_avatar_status()
-                    self._set_status("Avatar generated successfully!")
-                    messagebox.showinfo("Success", "Avatar captured successfully!\n\nYour face will appear in alerts.")
-                else:
-                    self._set_status("Avatar generation failed")
-                    messagebox.showerror(
-                        "Face Detection Failed",
-                        "Could not detect your face.\n\n"
-                        "Please ensure:\n"
-                        "• Camera is working\n"
-                        "• You are facing the camera\n"
-                        "• Lighting is good\n\n"
-                        "Try again?"
-                    )
+            # Refresh display
+            self._refresh_target_list()
 
-            except Exception as e:
-                self._set_status(f"Avatar generation error: {e}")
-                messagebox.showerror("Error", f"Failed to generate avatar:\n{e}")
+        except Exception as e:
+            self._ai_response_label.config(text=f"❌ Error: {str(e)}", foreground="#cc0000")
 
-            finally:
-                self._regen_avatar_btn.config(state=tk.NORMAL)
+    def _ai_add_target(self, name: str) -> str:
+        """AI callback: Add target."""
+        from src.core.services.target_resolver import TargetResolver
+        url, process_name, display_name = TargetResolver.resolve(name)
+
+        try:
+            self._add_target.execute(
+                name=display_name,
+                url_str=url.value if url else None,
+                process_name_str=process_name.value if process_name else None
+            )
+            return f"Added {display_name}"
+        except Exception as e:
+            return f"Failed to add {name}: {str(e)}"
+
+    def _ai_remove_target(self, name: str) -> str:
+        """AI callback: Remove target."""
+        try:
+            self._remove_target.execute(name=name)
+            return f"Removed {name}"
+        except Exception as e:
+            return f"Failed to remove {name}: {str(e)}"
+
+    def _ai_start_monitoring(self) -> str:
+        """AI callback: Start monitoring."""
+        try:
+            self._start_monitoring.execute(
+                check_callback=self._check_targets.execute,
+                interval_seconds=1
+            )
+            return "Monitoring started"
+        except Exception as e:
+            return f"Failed to start: {str(e)}"
+
+    def _ai_stop_monitoring(self) -> str:
+        """AI callback: Stop monitoring."""
+        try:
+            self._stop_monitoring.execute()
+            return "Monitoring stopped"
+        except Exception as e:
+            return f"Failed to stop: {str(e)}"
+
+    def _ai_list_targets(self) -> str:
+        """AI callback: List targets."""
+        targets = self._session.get_all_targets()
+        if not targets:
+            return "No targets"
+        return f"Monitoring {len(targets)} targets: {', '.join(t.name for t in targets)}"
 
     def _on_add_target(self):
         """Handle add target button click - AUTO-RESOLVE version."""

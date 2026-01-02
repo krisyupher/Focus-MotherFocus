@@ -47,11 +47,13 @@ class WindowsAlertNotifier(IAlertNotifier):
         active_popups: Dictionary tracking active popup windows per URL
         camera_manager: Singleton camera manager for webcam access (fallback)
         avatar_animator: Optional avatar animator for speaking alerts
+        _alert_states: Dictionary tracking window state (window, widgets, TTS) per target
     """
     parent_window: Optional[tk.Tk] = None
     active_popups: Dict[str, List] = field(default_factory=dict)
     camera_manager: CameraManager = field(default_factory=CameraManager)
     avatar_animator: Optional[AvatarAnimator] = None
+    _alert_states: Dict[str, dict] = field(default_factory=dict)
 
     def send_alert(self, url: URL) -> None:
         """
@@ -207,9 +209,97 @@ class WindowsAlertNotifier(IAlertNotifier):
         """
         Display a ZORDON-STYLE retro alert with ANIMATED AVATAR and TTS.
 
+        If window already exists for this target, UPDATE the message and re-focus.
+        Otherwise, create a new window.
+
         Args:
             name: Target name to display in alert
         """
+        # CHECK IF WINDOW ALREADY EXISTS for this target
+        if name in self._alert_states:
+            alert_state = self._alert_states[name]
+            alert_window = alert_state.get('window')
+
+            # Verify window still exists
+            try:
+                if alert_window and alert_window.winfo_exists():
+                    # WINDOW EXISTS - UPDATE IT
+                    print(f"[ALERT] Updating existing alert for {name}")
+
+                    # Get new random message
+                    message = random.choice(MOTIVATIONAL_MESSAGES)
+
+                    # Update message label
+                    message_label = alert_state.get('message_label')
+                    if message_label:
+                        message_label.configure(text=message)
+
+                    # Update timestamp
+                    time_label = alert_state.get('time_label')
+                    if time_label:
+                        timestamp = datetime.now().strftime("%H:%M:%S")
+                        time_label.configure(text=f"TIME: {timestamp}")
+
+                    # Stop and cleanup old TTS if still speaking
+                    old_tts = alert_state.get('tts')
+                    if old_tts:
+                        try:
+                            old_tts.stop()
+                            # Give engine time to cleanup
+                            import time
+                            time.sleep(0.1)
+                        except:
+                            pass
+
+                    # Get avatar and create callbacks
+                    animated_avatar = self.camera_manager._animated_avatar
+                    if animated_avatar:
+                        def on_update_start():
+                            animated_avatar.start_speaking()
+
+                        def on_update_complete():
+                            animated_avatar.stop_speaking()
+
+                        # Reuse same TTS instance and speak new message with avatar callbacks
+                        try:
+                            print(f"[ALERT] Speaking updated message: {message}")
+                            old_tts.speak(
+                                message,
+                                on_start=on_update_start,
+                                on_complete=on_update_complete,
+                                blocking=False
+                            )
+                        except Exception as e:
+                            print(f"[ALERT] TTS error: {e}")
+                    else:
+                        # No avatar, just speak
+                        try:
+                            print(f"[ALERT] Speaking updated message: {message}")
+                            old_tts.speak(message, blocking=False)
+                        except Exception as e:
+                            print(f"[ALERT] TTS error: {e}")
+
+                    # RE-FOCUS window to steal attention
+                    alert_window.lift()
+                    alert_window.focus_force()
+                    try:
+                        alert_window.grab_set()
+                        alert_window.grab_set_global()
+                    except:
+                        pass
+
+                    return  # DONE - window updated, don't create new one
+                else:
+                    # Window was destroyed, remove from tracking
+                    del self._alert_states[name]
+            except:
+                # Error checking window, remove from tracking
+                if name in self._alert_states:
+                    del self._alert_states[name]
+
+        # NO EXISTING WINDOW - CREATE NEW ONE
+        print(f"[ALERT] Creating new alert window for {name}")
+
         alert_window = tk.Toplevel(self.parent_window) if self.parent_window else tk.Tk()
         alert_window.title("⚡ ZORDON ALERT SYSTEM ⚡")
         alert_window.geometry("600x500")
@@ -217,6 +307,11 @@ class WindowsAlertNotifier(IAlertNotifier):
 
         # Random motivational message
         message = random.choice(MOTIVATIONAL_MESSAGES)
+
+        # Create animated avatar for this alert
+        from src.infrastructure.adapters.animated_avatar import AnimatedAvatar
+        animated_avatar = AnimatedAvatar()
+        self.camera_manager.set_animated_avatar(animated_avatar)
 
         # Start camera for LIVE feed on each alert
         self.camera_manager.start_camera()
@@ -227,10 +322,20 @@ class WindowsAlertNotifier(IAlertNotifier):
 
         # Animation control
         animation_running = {'value': True}
+        is_currently_speaking = {'value': False}
 
         # TTS control - create NEW TTS instance for EACH alert
         from src.infrastructure.adapters.windows_tts_service import WindowsTTSService
         alert_tts = WindowsTTSService()
+
+        # Callbacks for TTS to control avatar
+        def on_tts_start():
+            is_currently_speaking['value'] = True
+            animated_avatar.start_speaking()
+
+        def on_tts_complete():
+            is_currently_speaking['value'] = False
+            animated_avatar.stop_speaking()
 
         def update_live_camera_frame():
             """Update with LIVE camera frame (15 FPS)."""
@@ -249,8 +354,12 @@ class WindowsAlertNotifier(IAlertNotifier):
                 return
 
             try:
-                # Get LIVE camera frame with Zordon effect
-                camera_bg = self.camera_manager.get_fullscreen_background_for_tk(width=600, height=500)
+                # Get LIVE camera frame with animated avatar
+                camera_bg = self.camera_manager.get_fullscreen_background_for_tk(
+                    width=600,
+                    height=500,
+                    is_speaking=is_currently_speaking['value']
+                )
                 if camera_bg:
                     bg_label.configure(image=camera_bg)
                     bg_label.image = camera_bg  # Keep reference
@@ -271,7 +380,12 @@ class WindowsAlertNotifier(IAlertNotifier):
         # Start TTS for THIS alert (new instance each time)
         try:
             print(f"[ALERT] Starting TTS: {message}")
-            alert_tts.speak(message, blocking=False)
+            alert_tts.speak(
+                message,
+                on_start=on_tts_start,
+                on_complete=on_tts_complete,
+                blocking=False
+            )
         except Exception as e:
             print(f"[ALERT] TTS error: {e}")
 
@@ -354,6 +468,10 @@ class WindowsAlertNotifier(IAlertNotifier):
             except:
                 pass
 
+            # Remove from alert states
+            if name in self._alert_states:
+                del self._alert_states[name]
+
             # Release grab and destroy
             try:
                 alert_window.grab_release()
@@ -382,10 +500,19 @@ class WindowsAlertNotifier(IAlertNotifier):
         )
         close_btn.pack()
 
-        # Track this popup
+        # Track this popup (for backward compatibility)
         if name not in self.active_popups:
             self.active_popups[name] = []
         self.active_popups[name].append(alert_window)
+
+        # STORE WINDOW STATE for updates
+        self._alert_states[name] = {
+            'window': alert_window,
+            'message_label': message_label,
+            'time_label': time_label,
+            'tts': alert_tts,
+            'animation_running': animation_running
+        }
 
         # Cleanup handler when window is closed manually
         def on_window_close():
@@ -416,6 +543,10 @@ class WindowsAlertNotifier(IAlertNotifier):
                     self.active_popups[name].remove(alert_window)
                 except ValueError:
                     pass
+
+            # Remove from alert states
+            if name in self._alert_states:
+                del self._alert_states[name]
 
             # Destroy window
             try:
