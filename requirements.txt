@@ -5,6 +5,8 @@ pywinauto>=0.6.8
 opencv-python>=4.8.0
 pillow>=10.0.0
 pyttsx3>=2.90
+# playwright>=1.40.0  # Disabled - causes issues, tab auto-close not critical
+pygame>=2.5.0
 
 # Development dependencies
 pytest>=7.4.0

@@ -4,6 +4,7 @@ from src.application.interfaces.http_checker import IHttpChecker
 from src.application.interfaces.browser_detector import IBrowserDetector
 from src.application.interfaces.process_detector import IProcessDetector
 from src.application.interfaces.alert_notifier import IAlertNotifier
+from src.application.interfaces.i_browser_controller import IBrowserController
 from typing import Optional
 
 
@@ -18,6 +19,7 @@ class CheckTargetsUseCase:
     Alert logic:
     - Trigger alert if EITHER condition is true (website active OR app running)
     - Clear alert if BOTH conditions are false
+    - Auto-close browser tabs after 10 seconds if configured
     """
 
     def __init__(
@@ -26,7 +28,9 @@ class CheckTargetsUseCase:
         http_checker: IHttpChecker,
         browser_detector: Optional[IBrowserDetector],
         process_detector: IProcessDetector,
-        alert_notifier: IAlertNotifier
+        alert_notifier: IAlertNotifier,
+        browser_controller: Optional[IBrowserController] = None,
+        auto_close_threshold: float = 10.0
     ):
         """
         Initialize the use case with dependencies.
@@ -37,12 +41,16 @@ class CheckTargetsUseCase:
             browser_detector: Optional service for detecting browser tabs
             process_detector: Service for detecting running processes
             alert_notifier: Service for sending/clearing alerts
+            browser_controller: Optional service for controlling browser tabs
+            auto_close_threshold: Seconds before auto-closing browser tabs
         """
         self._session = session
         self._http_checker = http_checker
         self._browser_detector = browser_detector
         self._process_detector = process_detector
         self._alert_notifier = alert_notifier
+        self._browser_controller = browser_controller
+        self._auto_close_threshold = auto_close_threshold
 
     def execute(self) -> None:
         """
@@ -77,6 +85,16 @@ class CheckTargetsUseCase:
 
                 # Send alert EVERY check cycle while active (continuous alerts)
                 self._alert_notifier.notify(target.name)
+
+                # Auto-close browser tab if threshold exceeded
+                if (self._browser_controller and
+                    target.has_website() and
+                    target.should_auto_close(self._auto_close_threshold)):
+
+                    # Only print when actually attempting to close
+                    closed = self._browser_controller.close_tab_with_url(target.url)
+                    if closed:
+                        print(f"[AutoClose] Closed {target.name} after {target.get_alert_duration():.0f}s")
             else:
                 # Clear alert when target becomes inactive
                 if target.is_alerting:

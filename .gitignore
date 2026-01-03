@@ -136,8 +136,15 @@ Thumbs.db
 node_modules/
 package-lock.json
 
-# Config files (contains monitoring targets)
-config.json
+# Config files (contains monitoring targets and API keys)
+config/*.json
+.env
+
+# Logs and generated outputs
+*.log
+*_logs/
+**/logs/
+docs/archive/
 
 # Build output
 build/
@@ -146,3 +153,10 @@ dist/
 # Temporary/debug files
 nul
 *.tmp
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/

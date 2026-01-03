@@ -1,107 +1,67 @@
 """
-Unified Website & Application Monitor - Clean Architecture Implementation
+FocusMotherFocus - AI Productivity Counselor with Avatar
 
-Main entry point with unified monitoring targets.
-Each target can monitor website, application, or both.
+Complete integration of all 4 phases:
+- Phase 1: Behavioral analysis and detection
+- Phase 2: Avatar counselor with voice interaction
+- Phase 3: Agreement enforcement with countdown timers
+- Phase 4: MCP service orchestration with health monitoring
+
+Single entry point - just run this file!
 """
 import tkinter as tk
-from src.core.entities.monitoring_session_v2 import MonitoringSessionV2
-from src.application.use_cases.add_target import AddTargetUseCase
-from src.application.use_cases.remove_target import RemoveTargetUseCase
-from src.application.use_cases.check_targets import CheckTargetsUseCase
-from src.application.use_cases.start_monitoring_v2 import StartMonitoringV2UseCase
-from src.application.use_cases.stop_monitoring_v2 import StopMonitoringV2UseCase
-from src.infrastructure.adapters import (
-    RequestsHttpChecker,
-    WindowsAlertNotifier,
-    ThreadedScheduler
-)
-from src.infrastructure.adapters.windows_browser_detector import WindowsBrowserDetector
-from src.infrastructure.adapters.windows_process_detector import WindowsProcessDetector
-from src.infrastructure.adapters.windows_startup_manager import WindowsStartupManager
-from src.infrastructure.persistence.json_config_repository_v2 import JsonConfigRepositoryV2
-from src.presentation.gui_v2 import UnifiedMonitorGUI
+import sys
 
-
-def create_application() -> UnifiedMonitorGUI:
-    """
-    Composition root - creates and wires all dependencies for unified monitoring.
-
-    Unified Architecture:
-    - Each target can monitor website, app, or both
-    - Single GUI for all monitoring
-    - Alert if EITHER condition is met
-
-    Returns:
-        Fully configured UnifiedMonitorGUI ready to run
-    """
-    # Create tkinter root window
-    root = tk.Tk()
-
-    # Infrastructure layer - adapters
-    config_repository = JsonConfigRepositoryV2(config_file_path="config.json")
-    http_checker = RequestsHttpChecker(timeout=5)
-    browser_detector = WindowsBrowserDetector()
-    process_detector = WindowsProcessDetector()
-    alert_notifier = WindowsAlertNotifier(parent_window=root)
-    scheduler = ThreadedScheduler()
-    startup_manager = WindowsStartupManager()
-
-    # Load or create unified monitoring session
-    session = config_repository.load_session()
-
-    # Application layer - use cases
-    add_target_use_case = AddTargetUseCase(
-        session=session,
-        config_repository=config_repository
-    )
-
-    remove_target_use_case = RemoveTargetUseCase(
-        session=session,
-        config_repository=config_repository,
-        alert_notifier=alert_notifier
-    )
-
-    check_targets_use_case = CheckTargetsUseCase(
-        session=session,
-        http_checker=http_checker,
-        browser_detector=browser_detector,
-        process_detector=process_detector,
-        alert_notifier=alert_notifier
-    )
-
-    start_monitoring_use_case = StartMonitoringV2UseCase(
-        session=session,
-        config_repository=config_repository,
-        scheduler=scheduler
-    )
-
-    stop_monitoring_use_case = StopMonitoringV2UseCase(
-        session=session,
-        config_repository=config_repository,
-        scheduler=scheduler,
-        alert_notifier=alert_notifier
-    )
-
-    # Presentation layer - Unified GUI
-    gui = UnifiedMonitorGUI(
-        session=session,
-        add_target_use_case=add_target_use_case,
-        remove_target_use_case=remove_target_use_case,
-        start_monitoring_use_case=start_monitoring_use_case,
-        stop_monitoring_use_case=stop_monitoring_use_case,
-        check_targets_use_case=check_targets_use_case,
-        startup_manager=startup_manager,
-        root=root
-    )
-
-    return gui
+from src.presentation.avatar_counselor_gui import AvatarCounselorGUI
 
 
 def main():
-    """Main entry point"""
-    app = create_application()
-    app.run()
+    """Main entry point - Avatar Counselor GUI with all phases integrated"""
+    print("=" * 80)
+    print("  FocusMotherFocus - AI Productivity Counselor")
+    print("=" * 80)
+    print()
+    print("Initializing complete system...")
+    print("  • Phase 1: Behavioral Analysis")
+    print("  • Phase 2: Avatar Counselor & Negotiation")
+    print("  • Phase 3: Agreement Enforcement")
+    print("  • Phase 4: MCP Service Orchestration")
+    print()
+
+    try:
+        # Create main window
+        root = tk.Tk()
+
+        # Create Avatar Counselor GUI (all phases integrated)
+        gui = AvatarCounselorGUI(root)
+
+        print()
+        print("=" * 80)
+        print("  ✅ Ready! Click 'Start Monitoring' to begin")
+        print("=" * 80)
+        print()
+        print("Features:")
+        print("  • Automatic behavioral monitoring")
+        print("  • Voice-based avatar interaction")
+        print("  • Smart agreement negotiation")
+        print("  • Countdown timers with warnings")
+        print("  • Automatic tab enforcement")
+        print("  • Service health monitoring")
+        print()
+        print("Just click the START button - everything else is automatic!")
+        print()
+
+        # Run main loop
+        gui.run()
+
+    except KeyboardInterrupt:
+        print("\n\n[Main] Shutting down...")
+        sys.exit(0)
+    except Exception as e:
+        print(f"\n[Main] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
 
 
 if __name__ == "__main__":

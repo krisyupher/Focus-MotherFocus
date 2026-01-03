@@ -223,8 +223,7 @@ class WindowsAlertNotifier(IAlertNotifier):
             # Verify window still exists
             try:
                 if alert_window and alert_window.winfo_exists():
-                    # WINDOW EXISTS - UPDATE IT
-                    print(f"[ALERT] Updating existing alert for {name}")
+                    # WINDOW EXISTS - UPDATE IT (silently, no console spam)
 
                     # Get new random message
                     message = random.choice(MOTIVATIONAL_MESSAGES)
@@ -262,7 +261,6 @@ class WindowsAlertNotifier(IAlertNotifier):
 
                         # Reuse same TTS instance and speak new message with avatar callbacks
                         try:
-                            print(f"[ALERT] Speaking updated message: {message}")
                             old_tts.speak(
                                 message,
                                 on_start=on_update_start,
@@ -270,14 +268,13 @@ class WindowsAlertNotifier(IAlertNotifier):
                                 blocking=False
                             )
                         except Exception as e:
-                            print(f"[ALERT] TTS error: {e}")
+                            pass  # Silently ignore TTS errors
                     else:
                         # No avatar, just speak
                         try:
-                            print(f"[ALERT] Speaking updated message: {message}")
                             old_tts.speak(message, blocking=False)
                         except Exception as e:
-                            print(f"[ALERT] TTS error: {e}")
+                            pass  # Silently ignore TTS errors
 
                     # RE-FOCUS window to steal attention
                     alert_window.lift()
@@ -379,7 +376,6 @@ class WindowsAlertNotifier(IAlertNotifier):
 
         # Start TTS for THIS alert (new instance each time)
         try:
-            print(f"[ALERT] Starting TTS: {message}")
             alert_tts.speak(
                 message,
                 on_start=on_tts_start,
@@ -387,7 +383,7 @@ class WindowsAlertNotifier(IAlertNotifier):
                 blocking=False
             )
         except Exception as e:
-            print(f"[ALERT] TTS error: {e}")
+            pass  # Silently ignore TTS errors
 
         # Start LIVE camera animation loop
         update_live_camera_frame()

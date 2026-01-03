@@ -2,6 +2,7 @@
 from dataclasses import dataclass, field
 from typing import Optional
 import uuid
+import time
 from ..value_objects.url import URL
 from ..value_objects.process_name import ProcessName
 
@@ -23,12 +24,14 @@ class MonitoringTarget:
         url: Optional URL to monitor (e.g., "https://netflix.com")
         process_name: Optional process name to monitor (e.g., "Netflix.exe")
         is_alerting: Whether currently alerting
+        alert_start_time: When the alert started (for auto-close feature)
     """
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     name: str = ""
     url: Optional[URL] = None
     process_name: Optional[ProcessName] = None
     is_alerting: bool = False
+    alert_start_time: Optional[float] = None
 
     def __post_init__(self):
         """Validate that at least one monitoring type is specified."""
@@ -56,11 +59,37 @@ class MonitoringTarget:
 
     def mark_as_alerting(self) -> None:
         """Mark this target as currently alerting."""
+        if not self.is_alerting:
+            self.alert_start_time = time.time()
         self.is_alerting = True
 
     def clear_alert(self) -> None:
         """Clear the alerting state."""
         self.is_alerting = False
+        self.alert_start_time = None
+
+    def get_alert_duration(self) -> float:
+        """
+        Get the duration of the current alert in seconds.
+
+        Returns:
+            Alert duration in seconds, or 0 if not alerting
+        """
+        if not self.is_alerting or self.alert_start_time is None:
+            return 0.0
+        return time.time() - self.alert_start_time
+
+    def should_auto_close(self, threshold_seconds: float = 10.0) -> bool:
+        """
+        Check if this target should be auto-closed.
+
+        Args:
+            threshold_seconds: Number of seconds before auto-close
+
+        Returns:
+            True if alert has been active for longer than threshold
+        """
+        return self.get_alert_duration() >= threshold_seconds
 
     def __str__(self) -> str:
         """String representation."""

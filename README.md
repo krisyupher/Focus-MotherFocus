@@ -1,46 +1,101 @@
 # FocusMotherFocus 🎯
 
-A productivity monitoring system with AI-powered natural language control and speaking animated avatar alerts.
+**AI Productivity Counselor with Avatar** - Complete 4-phase system for behavioral monitoring, voice-based intervention, and smart enforcement.
 
-## Features
-
-- **Unified Monitoring**: Monitor both websites AND desktop applications
-- **AI Natural Language Control**: Control everything using natural language commands via OpenAI
-- **Animated Avatar Alerts**: Zordon-style fullscreen alerts with speaking animated avatar
-- **Smart Detection**: Automatically detects browser tabs and running processes
-- **Auto-startup**: Configure to run on system boot
-
-## Quick Start
-
-### 1. Install Dependencies
+## Quick Start (Single Command!)
 
 ```bash
+# Install dependencies (one-time)
 pip install -r requirements.txt
+
+# Run FocusMotherFocus
+python main_v2.py
 ```
 
-### 2. Configure OpenAI API Key
+**That's it!** Click "Start Monitoring" in the GUI and the AI counselor handles everything automatically.
 
-Create a `.env` file in the project root:
+## What It Does
+
+1. **Monitors your activity** - Detects endless scrolling, distractions, inappropriate content
+2. **Avatar intervenes** - Speaks to you with voice when patterns detected
+3. **Negotiates agreements** - "How much longer do you need?" → You: "10 minutes"
+4. **Enforces time limits** - Countdown timer, warnings, grace period
+
+**Note**: Tab auto-close is disabled (Playwright removed to avoid issues). All other features work perfectly!
+
+## Complete System Features
+
+### ✅ Phase 1: Behavioral Analysis
+- **Pattern Detection**: Endless scrolling (20+ seconds), adult content, distraction sites
+- **Smart Triggering**: Severity-based intervention with cooldown to prevent spam
+- **Intelligent Analysis**: Recognizes habitual behaviors
+
+### ✅ Phase 2: Avatar Counselor
+- **Voice Interaction**: Speaks using ElevenLabs (or Windows TTS fallback)
+- **Natural Dialogue**: Multi-turn conversation for time negotiation
+- **Agreement Creation**: Stores commitments with expiration tracking
+
+### ✅ Phase 3: Agreement Enforcement
+- **Countdown Timers**: Color-coded visual feedback (green/yellow/red)
+- **Smart Warnings**: Notifications 1 minute before expiration
+- **Grace Periods**: 30 seconds to wrap up after time's up
+- **Automatic Tab Closure**: Enforces agreements via Playwright
+
+### ✅ Phase 4: Service Orchestration
+- **Auto-Discovery**: Finds and initializes 9 MCP services automatically
+- **Health Monitoring**: Checks service health every 30 seconds
+- **Intelligent Fallbacks**: Auto-switches when primary service fails
+- **Self-Healing**: Recovers from service failures automatically
+
+## Minimal Interface
 
 ```
-OPENAI_API_KEY=your_openai_api_key_here
+┌────────────────────────────────────────┐
+│       🎯 FocusMotherFocus              │
+│   AI Productivity Counselor            │
+│                                        │
+│   ┌──────────────────────────┐         │
+│   │                          │         │
+│   │     👤 Avatar            │         │
+│   │                          │         │
+│   │   "Monitoring your       │         │
+│   │    activity..."          │         │
+│   │                          │         │
+│   └──────────────────────────┘         │
+│                                        │
+│      [▶ Start Monitoring]              │
+│                                        │
+│     Ready to start                     │
+└────────────────────────────────────────┘
 ```
 
-### 3. Run the Application
+**One button. That's all.** Everything else is automatic
 
+**3. Start Monitoring:**
+Type: `"Start monitoring"`
+
+### Enable Auto-Close Feature
+
+Automatically close distraction tabs after 10 seconds:
+
+**1. Install Playwright:**
+```bash
+playwright install chromium
+```
+
+**2. Start Chrome with Debugging:**
+```batch
+start_chrome_debug.bat
+```
+
+**3. Run App:**
 ```bash
 python main_v2.py
 ```
 
-### 4. Use Natural Language Commands
+Now distraction sites close automatically! 🎯
 
-Type commands in the AI Assistant section:
-
-- "Monitor Netflix and YouTube"
-- "Start monitoring"
-- "Show my targets"
-- "Remove Facebook"
-- "Stop monitoring"
+📖 **Full setup guide:** [QUICKSTART.md](QUICKSTART.md)
 
 ## Project Structure
 
@@ -63,8 +118,8 @@ FocusMotherFocus/
 ├── scripts/                      # Test and debug scripts
 ├── docs/                         # Documentation
 ├── main_v2.py                    # Application entry point
-├── mcp_server.py                 # MCP server for AI integration
-├── openai_mcp_client.py          # OpenAI MCP client
+├── openai_mcp_client.py          # OpenAI MCP client (Playwright integration)
+├── mcp_client_config.json        # MCP server configuration
 ├── requirements.txt              # Python dependencies
 ├── pytest.ini                    # Pytest configuration
 ├── build.bat                     # Build script for Windows
@@ -104,7 +159,8 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed architecture docum
 
 ### Technical Documentation
 - [Architecture](docs/ARCHITECTURE.md) - System architecture and design patterns
-- [MCP Integration Guide](docs/MCP_INTEGRATION_GUIDE.md) - MCP server and client setup
+- [Playwright MCP Guide](docs/PLAYWRIGHT_MCP_GUIDE.md) - Browser automation with OpenAI + Playwright
+- [Multi-MCP Guide](docs/MULTI_MCP_GUIDE.md) - Browser + Filesystem with multiple MCP servers
 - [Distribution](docs/DISTRIBUTION.md) - Building executables
 
 ### Troubleshooting
