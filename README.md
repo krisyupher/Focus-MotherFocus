@@ -39,7 +39,7 @@ python main_v2.py
 - **Countdown Timers**: Color-coded visual feedback (green/yellow/red)
 - **Smart Warnings**: Notifications 1 minute before expiration
 - **Grace Periods**: 30 seconds to wrap up after time's up
-- **Automatic Tab Closure**: Enforces agreements via Playwright
+- **Self-Discipline Mode**: Voice reminders help you stay accountable
 
 ### ✅ Phase 4: Service Orchestration
 - **Auto-Discovery**: Finds and initializes 9 MCP services automatically
