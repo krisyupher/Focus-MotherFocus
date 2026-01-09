@@ -53,7 +53,7 @@ android {
 
 dependencies {
     // Kotlin
-    implementation("org.jetbrains.kotlin:kotlin-stdlib:1.9.22")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.0.0")
 
     // AndroidX Core
     implementation("androidx.core:core-ktx:1.12.0")

@@ -1,11 +1,8 @@
 package com.focusmother.android.ui
 
-import android.app.AppOpsManager
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.os.Bundle
-import android.os.Process
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -54,6 +51,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     fun MainScreen() {
         var hasPermission by remember { mutableStateOf(usageMonitor.hasUsageStatsPermission()) }
@@ -73,10 +71,7 @@ class MainActivity : ComponentActivity() {
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("FocusMother") },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
-                    )
+                    title = { Text("FocusMother") }
                 )
             }
         ) { padding ->
@@ -294,11 +289,7 @@ class MainActivity : ComponentActivity() {
         }
 
         if (isMonitoring) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(serviceIntent)
-            } else {
-                startService(serviceIntent)
-            }
+            startForegroundService(serviceIntent)
         } else {
             stopService(serviceIntent)
         }
