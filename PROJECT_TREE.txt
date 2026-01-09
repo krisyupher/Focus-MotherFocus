@@ -1,0 +1,115 @@
+FocusMotherFocus/ (ROOT - Monorepo)
+│
+├── 📄 README.md                        ← Start here!
+├── 📄 ARCHITECTURE.md                  ← Technical overview
+├── 📄 CONTRIBUTING.md                  ← How to contribute
+├── 📄 MONOREPO_GUIDE.md               ← Monorepo guide
+├── 📄 MIGRATION_SUMMARY.md            ← Migration details
+├── 📄 .gitignore                       ← Git ignore (all platforms)
+├── 📄 .env                             ← Root environment variables
+│
+├── 🖥️  desktop/                        ← WINDOWS DESKTOP APP (Original)
+│   ├── 📂 src/                         ← Source code
+│   │   ├── core/                       ← Domain entities
+│   │   ├── application/                ← Use cases
+│   │   ├── infrastructure/             ← External services
+│   │   ├── presentation/               ← GUI
+│   │   └── mcp_servers/                ← MCP integrations
+│   ├── 📂 tests/                       ← 87 tests (passing)
+│   ├── 📂 docs/                        ← Desktop documentation
+│   ├── 📂 config/                      ← Configuration files
+│   ├── 📂 examples/                    ← Demo scripts
+│   ├── 📂 scripts/                     ← Utility scripts
+│   ├── 🐍 main_v2.py                   ← Entry point (RUN THIS!)
+│   ├── 📄 requirements.txt             ← Python dependencies
+│   ├── 📄 pytest.ini                   ← Test configuration
+│   ├── 🔨 build.bat                    ← Build Windows .exe
+│   ├── 📄 FocusMonitor.spec            ← PyInstaller spec
+│   └── 📄 README.md                    ← Desktop docs
+│
+├── 🔌 backend/                         ← BACKEND SERVER (NEW!)
+│   │
+│   ├── 📂 api/                         ← FastAPI REST API
+│   │   ├── 📂 routers/                 ← API endpoints
+│   │   │   ├── monitoring.py          ← /api/v1/monitoring/*
+│   │   │   ├── agreements.py          ← /api/v1/agreements/*
+│   │   │   └── avatar.py              ← /api/v1/avatar/*
+│   │   ├── 📂 models/                  ← Pydantic models
+│   │   ├── 📂 services/                ← Business services
+│   │   ├── 🐍 main.py                  ← API entry point
+│   │   ├── 📄 requirements.txt         ← API dependencies
+│   │   └── 📄 README.md                ← API documentation
+│   │
+│   └── 📂 shared/                      ← SHARED CORE LOGIC
+│       ├── 📂 core/                    ← Domain layer
+│       │   ├── entities/               ← Business entities
+│       │   │   ├── agreement.py
+│       │   │   ├── monitoring_target.py
+│       │   │   └── ...
+│       │   └── value_objects/          ← Value objects
+│       │       ├── url.py
+│       │       └── process_name.py
+│       ├── 📂 services/                ← Shared services
+│       ├── 🐍 __init__.py
+│       └── 📄 README.md                ← Shared core docs
+│
+└── 📱 mobile/                          ← MOBILE APPS (Ready to build)
+    │
+    ├── 📂 android/                     ← Android app
+    │   └── 📄 README.md                ← Android setup guide
+    │
+    ├── 📂 ios/                         ← iOS app
+    │   └── 📄 README.md                ← iOS setup guide
+    │
+    ├── 📂 shared/                      ← Mobile shared resources
+    │   └── 📄 FRAMEWORKS.md            ← Framework comparison
+    │
+    └── 📄 README.md                    ← Mobile dev guide
+
+
+═══════════════════════════════════════════════════════════
+
+QUICK START COMMANDS:
+
+  Desktop App (Windows):
+    cd desktop
+    python main_v2.py
+
+  Backend API Server:
+    cd backend/api
+    pip install -r requirements.txt
+    python main.py
+    # Visit http://localhost:8000/docs
+
+  Mobile App Development:
+    cd mobile
+    # Choose your framework (see FRAMEWORKS.md)
+    # React Native, Flutter, .NET MAUI, or Native
+
+  Run Tests:
+    cd desktop
+    pytest
+
+  Build Windows Executable:
+    cd desktop
+    build.bat
+
+═══════════════════════════════════════════════════════════
+
+PLATFORM STATUS:
+
+  ✅ Desktop    - COMPLETE (4 phases, 87 tests passing)
+  🟡 Backend    - SCAFFOLD READY (needs implementation)
+  📋 Mobile     - READY (structure in place, choose framework)
+
+═══════════════════════════════════════════════════════════
+
+NEXT STEPS:
+
+  1. Continue using desktop app (works as before!)
+  2. Implement Backend API (when ready for mobile)
+  3. Choose mobile framework (React Native recommended)
+  4. Build mobile apps (2-4 weeks)
+  5. Deploy to cloud (AWS, Heroku, Azure, etc.)
+
+═══════════════════════════════════════════════════════════

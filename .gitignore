@@ -139,16 +139,47 @@ package-lock.json
 # Config files (contains monitoring targets and API keys)
 config/*.json
 .env
+.env.local
+.env.*.local
+
+# Desktop app specific
+desktop/config/*.json
+desktop/dist/
+desktop/build/
+
+# Backend API specific
+backend/api/*.db
+backend/api/*.sqlite
+backend/api/uploads/
+backend/api/.env
+
+# Mobile - React Native
+mobile/node_modules/
+mobile/.expo/
+mobile/npm-debug.log*
+mobile/yarn-debug.log*
+mobile/yarn-error.log*
+mobile/.bundle/
+mobile/android/.gradle/
+mobile/android/captures/
+mobile/android/local.properties
+mobile/ios/Pods/
+mobile/ios/.symlinks/
+
+# Mobile - Flutter
+mobile/.dart_tool/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/.packages
+mobile/.pub-cache/
+mobile/.pub/
+mobile/build/
 
 # Logs and generated outputs
 *.log
 *_logs/
 **/logs/
 docs/archive/
-
-# Build output
-build/
-dist/
 
 # Temporary/debug files
 nul

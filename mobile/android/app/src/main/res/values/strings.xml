@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">FocusMother</string>
+    <string name="monitoring_service_title">FocusMother is Monitoring</string>
+    <string name="monitoring_service_description">Tracking your phone usage to help you stay focused</string>
+    <string name="intervention_title">Time for a Break?</string>
+    <string name="permission_required">Usage Access Permission Required</string>
+    <string name="permission_description">FocusMother needs permission to monitor your phone usage</string>
+    <string name="grant_permission">Grant Permission</string>
+</resources>
