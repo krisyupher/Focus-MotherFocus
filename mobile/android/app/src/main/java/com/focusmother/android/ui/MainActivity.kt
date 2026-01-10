@@ -7,21 +7,33 @@ import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
+import com.focusmother.android.R
 import com.focusmother.android.monitor.UsageMonitor
 import com.focusmother.android.service.MonitoringService
 import com.focusmother.android.ui.theme.FocusMotherFocusTheme
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -44,11 +56,6 @@ class MainActivity : ComponentActivity() {
                 MainScreen()
             }
         }
-
-        // Check if opened from intervention notification
-        if (intent.getBooleanExtra("show_intervention", false)) {
-            // Could show a dialog or navigate to intervention screen
-        }
     }
 
     @OptIn(ExperimentalMaterial3Api::class)
@@ -56,83 +63,192 @@ class MainActivity : ComponentActivity() {
     fun MainScreen() {
         var hasPermission by remember { mutableStateOf(usageMonitor.hasUsageStatsPermission()) }
         var todayScreenTime by remember { mutableStateOf("Loading...") }
+        var screenTimeMs by remember { mutableStateOf(0L) }
         var topApps by remember { mutableStateOf(listOf<com.focusmother.android.monitor.AppUsageInfo>()) }
+        var zordonMessage by remember { mutableStateOf("") }
 
         LaunchedEffect(Unit) {
             hasPermission = usageMonitor.hasUsageStatsPermission()
             if (hasPermission) {
-                loadStats { screenTime, apps ->
+                loadStats { screenTime, apps, timeMs ->
                     todayScreenTime = screenTime
                     topApps = apps
+                    screenTimeMs = timeMs
+                    zordonMessage = getZordonMessage(timeMs, isMonitoring)
                 }
             }
         }
 
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text("FocusMother") }
-                )
+        // Check for intervention
+        val showIntervention = intent.getBooleanExtra("show_intervention", false)
+        val interventionMessage = intent.getStringExtra("intervention_message") ?: ""
+
+        if (showIntervention && interventionMessage.isNotEmpty()) {
+            LaunchedEffect(Unit) {
+                zordonMessage = "Rangers! I mean... $interventionMessage"
             }
+        }
+
+        Scaffold(
+            containerColor = Color(0xFF0A0A1A)
         ) { padding ->
-            Column(
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(padding)
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                if (!hasPermission) {
-                    PermissionCard { requestUsageStatsPermission() }
-                } else {
-                    MonitoringControlCard(
-                        isMonitoring = isMonitoring,
-                        onToggle = { toggleMonitoring() }
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color(0xFF0A0A1A),
+                                Color(0xFF1A1A2E),
+                                Color(0xFF0A0A1A)
+                            )
+                        )
                     )
+                    .padding(padding)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(24.dp)
+                ) {
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                    ScreenTimeCard(todayScreenTime)
+                    if (!hasPermission) {
+                        ZordonAvatar()
+                        ZordonSpeechBubble(
+                            message = "Young warrior! I require access to monitor your digital realm. Grant me the Usage Access permission to guide you towards balance and discipline!"
+                        )
+                        Spacer(modifier = Modifier.weight(1f))
+                        Button(
+                            onClick = { requestUsageStatsPermission() },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF7C0EDA)
+                            )
+                        ) {
+                            Icon(Icons.Default.Settings, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Grant Permission to Zordon")
+                        }
+                    } else {
+                        ZordonAvatar()
 
-                    TopAppsCard(topApps)
+                        ZordonSpeechBubble(message = zordonMessage)
+
+                        MonitoringControlCard(
+                            isMonitoring = isMonitoring,
+                            onToggle = {
+                                toggleMonitoring()
+                                zordonMessage = if (!isMonitoring) {
+                                    "Excellent! I shall now observe your activities and guide you when the path becomes treacherous."
+                                } else {
+                                    "The monitoring has ceased. But remember, discipline comes from within, not from observation alone."
+                                }
+                            }
+                        )
+
+                        ScreenTimeCard(todayScreenTime, screenTimeMs)
+
+                        if (topApps.isNotEmpty()) {
+                            TopAppsCard(topApps)
+                        }
+                    }
                 }
             }
         }
     }
 
     @Composable
-    fun PermissionCard(onRequestPermission: () -> Unit) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.errorContainer
+    fun ZordonAvatar() {
+        val infiniteTransition = rememberInfiniteTransition(label = "glow")
+        val glowAlpha by infiniteTransition.animateFloat(
+            initialValue = 0.3f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(2000, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "glowAlpha"
+        )
+
+        Box(
+            modifier = Modifier.size(200.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            // Outer glow
+            Box(
+                modifier = Modifier
+                    .size(200.dp)
+                    .alpha(glowAlpha)
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(
+                                Color(0xFF7C0EDA).copy(alpha = 0.5f),
+                                Color.Transparent
+                            )
+                        ),
+                        shape = CircleShape
+                    )
             )
+
+            // Avatar
+            Image(
+                painter = painterResource(id = R.drawable.ic_zordon_avatar),
+                contentDescription = "Zordon Avatar",
+                modifier = Modifier.size(180.dp)
+            )
+        }
+    }
+
+    @Composable
+    fun ZordonSpeechBubble(message: String) {
+        var displayedText by remember { mutableStateOf("") }
+
+        LaunchedEffect(message) {
+            displayedText = ""
+            message.forEachIndexed { index, char ->
+                displayedText += char
+                delay(30)
+            }
+        }
+
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = Color(0xFF1A1A2E)
+            ),
+            shape = RoundedCornerShape(16.dp),
+            border = androidx.compose.foundation.BorderStroke(2.dp, Color(0xFF7C0EDA))
         ) {
             Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.padding(20.dp)
             ) {
-                Icon(
-                    Icons.Default.Warning,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.error
-                )
                 Text(
-                    "Permission Required",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    text = displayedText,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = Color(0xFFE0E0E0),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
+                    fontWeight = FontWeight.Medium
                 )
-                Text(
-                    "FocusMother needs Usage Access permission to monitor your phone usage and help you stay focused.",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Button(
-                    onClick = onRequestPermission,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Default.Settings, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Grant Permission")
-                }
             }
+        }
+    }
+
+    fun getZordonMessage(screenTimeMs: Long, isMonitoring: Boolean): String {
+        val minutes = screenTimeMs / 1000 / 60
+
+        return when {
+            !isMonitoring -> "The monitoring is inactive, but I remain vigilant. Activate my powers to receive guidance on your journey."
+            minutes > 180 -> "Rangers! I have observed EXCESSIVE time spent in the digital realm - over 3 hours! You must step away from your device and engage with the physical world. This is not a request!"
+            minutes > 120 -> "Young warrior, I sense you have spent over 2 hours gazing into the digital void. The forces of distraction are strong, but you are stronger. Take a break and restore your focus!"
+            minutes > 60 -> "I have been monitoring your activities. Over an hour has passed in the digital realm. Remember: balance is the key to mastery. Consider a brief respite."
+            minutes > 30 -> "Your usage patterns are within acceptable parameters, but remain vigilant. The temptation of endless scrolling is a powerful adversary."
+            else -> "Greetings, warrior of the digital age! I am monitoring your device usage. Together, we shall maintain balance and discipline. Your screen time is currently under control."
         }
     }
 
@@ -142,9 +258,13 @@ class MainActivity : ComponentActivity() {
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
                 containerColor = if (isMonitoring)
-                    MaterialTheme.colorScheme.primaryContainer
+                    Color(0xFF2D1B4E)
                 else
-                    MaterialTheme.colorScheme.surfaceVariant
+                    Color(0xFF1A1A2E)
+            ),
+            border = androidx.compose.foundation.BorderStroke(
+                2.dp,
+                if (isMonitoring) Color(0xFF00FF00) else Color(0xFF7C0EDA)
             )
         ) {
             Row(
@@ -156,29 +276,51 @@ class MainActivity : ComponentActivity() {
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        if (isMonitoring) "Monitoring Active" else "Monitoring Paused",
+                        if (isMonitoring) "⚡ Zordon is Watching" else "💤 Zordon Rests",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        color = if (isMonitoring) Color(0xFF00FF00) else Color(0xFF7C0EDA)
                     )
                     Text(
                         if (isMonitoring)
-                            "FocusMother is watching your usage"
+                            "Guardian powers active"
                         else
-                            "Start monitoring to get alerts",
-                        style = MaterialTheme.typography.bodySmall
+                            "Activate to receive guidance",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFFB0B0B0)
                     )
                 }
                 Switch(
                     checked = isMonitoring,
-                    onCheckedChange = { onToggle() }
+                    onCheckedChange = { onToggle() },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color(0xFF00FF00),
+                        checkedTrackColor = Color(0xFF2D1B4E),
+                        uncheckedThumbColor = Color(0xFF7C0EDA),
+                        uncheckedTrackColor = Color(0xFF1A1A2E)
+                    )
                 )
             }
         }
     }
 
     @Composable
-    fun ScreenTimeCard(screenTime: String) {
-        Card(modifier = Modifier.fillMaxWidth()) {
+    fun ScreenTimeCard(screenTime: String, screenTimeMs: Long) {
+        val minutes = screenTimeMs / 1000 / 60
+        val warningLevel = when {
+            minutes > 180 -> Color(0xFFFF0000) // Red - Critical
+            minutes > 120 -> Color(0xFFFF6B00) // Orange - Warning
+            minutes > 60 -> Color(0xFFFFD700)  // Yellow - Caution
+            else -> Color(0xFF00FF00)          // Green - Good
+        }
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = Color(0xFF1A1A2E)
+            ),
+            border = androidx.compose.foundation.BorderStroke(2.dp, warningLevel)
+        ) {
             Column(
                 modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -187,17 +329,23 @@ class MainActivity : ComponentActivity() {
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(Icons.Default.Phone, contentDescription = null)
+                    Icon(
+                        Icons.Default.Phone,
+                        contentDescription = null,
+                        tint = warningLevel
+                    )
                     Text(
-                        "Today's Screen Time",
+                        "Digital Realm Activity",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFE0E0E0)
                     )
                 }
                 Text(
                     screenTime,
                     style = MaterialTheme.typography.headlineLarge,
-                    color = MaterialTheme.colorScheme.primary
+                    color = warningLevel,
+                    fontWeight = FontWeight.Bold
                 )
             }
         }
@@ -205,7 +353,13 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     fun TopAppsCard(apps: List<com.focusmother.android.monitor.AppUsageInfo>) {
-        Card(modifier = Modifier.fillMaxWidth()) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = Color(0xFF1A1A2E)
+            ),
+            border = androidx.compose.foundation.BorderStroke(2.dp, Color(0xFF7C0EDA))
+        ) {
             Column(
                 modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -214,19 +368,24 @@ class MainActivity : ComponentActivity() {
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(Icons.Default.Star, contentDescription = null)
+                    Icon(
+                        Icons.Default.Star,
+                        contentDescription = null,
+                        tint = Color(0xFF7C0EDA)
+                    )
                     Text(
-                        "Most Used Apps",
+                        "Detected Applications",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFE0E0E0)
                     )
                 }
 
                 if (apps.isEmpty()) {
                     Text(
-                        "No data yet",
+                        "Scanning the digital realm...",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = Color(0xFFB0B0B0)
                     )
                 } else {
                     LazyColumn(
@@ -252,13 +411,14 @@ class MainActivity : ComponentActivity() {
             Text(
                 app.appName,
                 style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                color = Color(0xFFE0E0E0)
             )
             Text(
                 app.getFormattedTime(),
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
+                color = Color(0xFF7C0EDA)
             )
         }
     }
@@ -295,13 +455,13 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun loadStats(onLoaded: (String, List<com.focusmother.android.monitor.AppUsageInfo>) -> Unit) {
+    private fun loadStats(onLoaded: (String, List<com.focusmother.android.monitor.AppUsageInfo>, Long) -> Unit) {
         lifecycleScope.launch {
             val screenTime = usageMonitor.getTodayScreenTime()
             val apps = usageMonitor.getTopApps(5)
 
             val formatted = formatScreenTime(screenTime)
-            onLoaded(formatted, apps)
+            onLoaded(formatted, apps, screenTime)
         }
     }
 

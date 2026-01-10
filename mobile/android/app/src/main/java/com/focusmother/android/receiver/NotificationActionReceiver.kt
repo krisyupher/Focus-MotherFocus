@@ -1,10 +1,11 @@
 package com.focusmother.android.receiver
 
 import android.app.NotificationManager
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.BroadcastReceiver
 import android.widget.Toast
+import androidx.core.content.edit
 import com.focusmother.android.service.MonitoringService
 
 /**
@@ -38,9 +39,9 @@ class NotificationActionReceiver : BroadcastReceiver() {
 
     private fun saveUserDecision(context: Context, decision: String) {
         val prefs = context.getSharedPreferences("focus_mother_prefs", Context.MODE_PRIVATE)
-        prefs.edit()
-            .putLong("last_decision_time", System.currentTimeMillis())
-            .putString("last_decision", decision)
-            .apply()
+        prefs.edit {
+            putLong("last_decision_time", System.currentTimeMillis())
+            putString("last_decision", decision)
+        }
     }
 }

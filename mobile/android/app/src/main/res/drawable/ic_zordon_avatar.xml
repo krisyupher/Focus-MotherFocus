@@ -1,0 +1,56 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportWidth="200"
+    android:viewportHeight="200">
+
+    <!-- Outer glow effect -->
+    <path
+        android:pathData="M100,100m-95,0a95,95 0,1 1,190 0a95,95 0,1 1,-190 0"
+        android:fillColor="#4D7C0EDA"
+        android:strokeWidth="2"
+        android:strokeColor="#7C0EDA"/>
+
+    <!-- Inner circle (face area) -->
+    <path
+        android:pathData="M100,100m-80,0a80,80 0,1 1,160 0a80,80 0,1 1,-160 0"
+        android:fillColor="#1A1A2E"
+        android:strokeWidth="3"
+        android:strokeColor="#7C0EDA"/>
+
+    <!-- Grid pattern overlay -->
+    <path
+        android:pathData="M30,100 L170,100 M100,30 L100,170"
+        android:strokeWidth="1"
+        android:strokeColor="#4D7C0EDA"/>
+
+    <!-- Eyes (glowing) -->
+    <path
+        android:pathData="M70,85m-12,0a12,12 0,1 1,24 0a12,12 0,1 1,-24 0"
+        android:fillColor="#00FF00"/>
+    <path
+        android:pathData="M130,85m-12,0a12,12 0,1 1,24 0a12,12 0,1 1,-24 0"
+        android:fillColor="#00FF00"/>
+
+    <!-- Inner eye glow -->
+    <path
+        android:pathData="M70,85m-8,0a8,8 0,1 1,16 0a8,8 0,1 1,-16 0"
+        android:fillColor="#FFFFFF"/>
+    <path
+        android:pathData="M130,85m-8,0a8,8 0,1 1,16 0a8,8 0,1 1,-16 0"
+        android:fillColor="#FFFFFF"/>
+
+    <!-- Mouth line (stern expression) -->
+    <path
+        android:pathData="M60,130 Q100,120 140,130"
+        android:strokeWidth="4"
+        android:strokeColor="#7C0EDA"
+        android:fillColor="#00000000"/>
+
+    <!-- Forehead detail -->
+    <path
+        android:pathData="M50,60 Q100,55 150,60"
+        android:strokeWidth="2"
+        android:strokeColor="#4D7C0EDA"
+        android:fillColor="#00000000"/>
+</vector>

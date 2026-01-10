@@ -23,7 +23,21 @@ class MonitoringService : Service() {
     private val serviceScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     private var lastInterventionTime = 0L
-    private val interventionCooldown = 15 * 60 * 1000L // 15 minutes cooldown
+    private val interventionCooldown = 30 * 1000L // Reduced for testing: 30 seconds
+
+    // List of "wasting" apps to monitor closely
+    private val distractionPackages = setOf(
+        "com.facebook.katana",
+        "com.facebook.lite",
+        "com.google.android.youtube",
+        "com.google.android.apps.youtube.music",
+        "com.instagram.android",
+        "com.tiktok.android",
+        "com.twitter.android",
+        "com.zhiliaoapp.musically",
+        "com.android.chrome", // Browser often used for adult content or wasting time
+        "com.sec.android.app.sbrowser"
+    )
 
     override fun onCreate() {
         super.onCreate()
@@ -54,39 +68,63 @@ class MonitoringService : Service() {
 
     private suspend fun performMonitoringCheck() {
         try {
-            // Check if user has been on phone for too long
-            val detection = usageMonitor.detectContinuousUsage(
-                thresholdMinutes = 30
-            )
+            val currentApp = usageMonitor.getCurrentApp()
 
-            // Trigger intervention if needed (with cooldown)
-            if (detection.isExcessive && shouldTriggerIntervention()) {
-                triggerIntervention(detection)
+            if (currentApp != null && distractionPackages.contains(currentApp.packageName)) {
+                // User is in a distraction app
+                val dailyUsage = currentApp.totalTimeInForeground
+                
+                // CRITICAL: Set to 1 minute (60,000ms) for very aggressive testing
+                val usageThreshold = 60 * 1000L 
+
+                if (dailyUsage > usageThreshold && shouldTriggerIntervention()) {
+                    triggerIntervention(currentApp.appName, dailyUsage)
+                    closeDistractionApp()
+                }
             }
 
-            // Update foreground notification with current stats
+            // General continuous usage check
+            val detection = usageMonitor.detectContinuousUsage(thresholdMinutes = 1) // Test: 1 min
+            if (detection.isExcessive && shouldTriggerIntervention()) {
+                triggerIntervention("phone", detection.screenTime)
+            }
+
+            // Update foreground notification
             updateForegroundNotification(detection.getFormattedScreenTime())
 
         } catch (e: Exception) {
-            // Log error but continue monitoring
             e.printStackTrace()
         }
+    }
+
+    private fun closeDistractionApp() {
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra("show_intervention", true)
+        }
+        startActivity(intent)
     }
 
     private fun shouldTriggerIntervention(): Boolean {
         val currentTime = System.currentTimeMillis()
         val timeSinceLastIntervention = currentTime - lastInterventionTime
-
         return timeSinceLastIntervention >= interventionCooldown
     }
 
-    private fun triggerIntervention(detection: com.focusmother.android.monitor.UsageDetection) {
+    private fun triggerIntervention(subject: String, duration: Long) {
         lastInterventionTime = System.currentTimeMillis()
 
-        // Create high-priority alert notification
+        val formattedTime = formatDuration(duration)
+        val message = if (subject == "phone") {
+            "Rangers! I have observed you have spent $formattedTime in the digital realm. This excessive usage must cease! Step away from your device!"
+        } else {
+            "Rangers! I have detected $formattedTime spent on $subject! This is a waste of your potential. Return to FocusMother immediately!"
+        }
+
         val alertIntent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             putExtra("show_intervention", true)
+            putExtra("intervention_message", message)
         }
 
         val pendingIntent = PendingIntent.getActivity(
@@ -98,55 +136,39 @@ class MonitoringService : Service() {
 
         val notification = NotificationCompat.Builder(this, FocusMotherApplication.CHANNEL_ALERT_ID)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("Time for a Break?")
-            .setContentText(detection.message)
-            .setStyle(NotificationCompat.BigTextStyle()
-                .bigText("${detection.message}\n\nYou've been active for ${detection.getFormattedScreenTime()}. Maybe it's time to take a break?"))
+            .setContentTitle("⚡ Zordon Commands You!")
+            .setContentText(message)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .setVibrate(longArrayOf(0, 400, 200, 400))
-            .addAction(
-                R.drawable.ic_check,
-                "I'll take a break",
-                createActionPendingIntent(ACTION_TAKE_BREAK)
-            )
-            .addAction(
-                R.drawable.ic_time,
-                "5 more minutes",
-                createActionPendingIntent(ACTION_REQUEST_TIME)
-            )
             .build()
 
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
         notificationManager.notify(INTERVENTION_NOTIFICATION_ID, notification)
     }
 
-    private fun createActionPendingIntent(action: String): PendingIntent {
-        val intent = Intent(this, com.focusmother.android.receiver.NotificationActionReceiver::class.java).apply {
-            this.action = action
+    private fun formatDuration(ms: Long): String {
+        val minutes = ms / 1000 / 60
+        val hours = minutes / 60
+        val remainingMinutes = minutes % 60
+        return when {
+            hours > 0 -> "${hours}h ${remainingMinutes}m"
+            else -> "${minutes}m"
         }
-        return PendingIntent.getBroadcast(
-            this,
-            action.hashCode(),
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
     }
 
     private fun createForegroundNotification(): Notification {
         val intent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(
-            this,
-            0,
-            intent,
+            this, 0, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
         return NotificationCompat.Builder(this, FocusMotherApplication.CHANNEL_SERVICE_ID)
-            .setContentTitle("FocusMother is Monitoring")
-            .setContentText("Tracking your phone usage...")
+            .setContentTitle("⚡ Zordon Watches Over You")
+            .setContentText("Observing your digital activities...")
             .setSmallIcon(R.drawable.ic_notification)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
@@ -156,8 +178,8 @@ class MonitoringService : Service() {
 
     private fun updateForegroundNotification(screenTime: String) {
         val notification = NotificationCompat.Builder(this, FocusMotherApplication.CHANNEL_SERVICE_ID)
-            .setContentTitle("FocusMother is Monitoring")
-            .setContentText("Screen time: $screenTime")
+            .setContentTitle("⚡ Zordon Watches Over You")
+            .setContentText("Digital realm time: $screenTime")
             .setSmallIcon(R.drawable.ic_notification)
             .setOngoing(true)
             .setSilent(true)
@@ -186,10 +208,9 @@ class MonitoringService : Service() {
         const val ACTION_STOP_MONITORING = "com.focusmother.android.STOP_MONITORING"
         const val ACTION_TAKE_BREAK = "com.focusmother.android.TAKE_BREAK"
         const val ACTION_REQUEST_TIME = "com.focusmother.android.REQUEST_TIME"
-
         private const val NOTIFICATION_ID = 1001
         private const val INTERVENTION_NOTIFICATION_ID = 1002
         private const val INTERVENTION_REQUEST_CODE = 100
-        private const val CHECK_INTERVAL_MS = 60_000L // Check every minute
+        private const val CHECK_INTERVAL_MS = 2000L // Fast check for testing
     }
 }
