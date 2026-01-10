@@ -160,11 +160,52 @@ mobile/npm-debug.log*
 mobile/yarn-debug.log*
 mobile/yarn-error.log*
 mobile/.bundle/
-mobile/android/.gradle/
-mobile/android/captures/
-mobile/android/local.properties
 mobile/ios/Pods/
 mobile/ios/.symlinks/
+
+# Mobile - Android (Kotlin/Jetpack Compose)
+# Gradle build system
+mobile/android/.gradle/
+mobile/android/gradle/
+mobile/android/gradlew
+mobile/android/gradlew.bat
+mobile/android/build/
+mobile/android/app/build/
+mobile/android/*/build/
+
+# Local configuration files (machine-specific)
+mobile/android/local.properties
+mobile/android/keystore.properties
+mobile/android/signing.properties
+# Note: gradle.properties is tracked - contains team-wide build settings
+
+# Android Studio / IntelliJ IDEA
+mobile/android/.idea/
+mobile/android/*.iml
+mobile/android/.idea/*
+!mobile/android/.idea/codeStyles/
+!mobile/android/.idea/inspectionProfiles/
+mobile/android/.externalNativeBuild/
+mobile/android/.cxx/
+
+# Kotlin build cache
+mobile/android/.kotlin/
+mobile/android/app/.kotlin/
+
+# Android signing files (security critical)
+*.keystore
+*.jks
+mobile/android/app/*.keystore
+mobile/android/app/*.jks
+mobile/android/release/
+
+# Android profiler
+mobile/android/captures/
+mobile/android/*.hprof
+
+# Android backup files
+mobile/android/*.backup
+mobile/android/**/*.backup
 
 # Mobile - Flutter
 mobile/.dart_tool/

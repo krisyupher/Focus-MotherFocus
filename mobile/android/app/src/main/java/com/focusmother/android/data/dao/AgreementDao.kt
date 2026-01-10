@@ -39,6 +39,15 @@ interface AgreementDao {
      */
     @Query("SELECT * FROM agreements ORDER BY createdAt DESC")
     suspend fun getAll(): List<Agreement>
+
+    /**
+     * Retrieves the most recent agreements up to a specified limit.
+     *
+     * @param limit Maximum number of agreements to retrieve
+     * @return List of recent agreements ordered by creation time (newest first)
+     */
+    @Query("SELECT * FROM agreements ORDER BY createdAt DESC LIMIT :limit")
+    suspend fun getRecent(limit: Int): List<Agreement>
     
     /**
      * Inserts a new agreement.

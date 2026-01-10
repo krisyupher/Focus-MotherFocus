@@ -30,8 +30,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import com.focusmother.android.R
+import com.focusmother.android.data.database.FocusMotherDatabase
 import com.focusmother.android.monitor.UsageMonitor
 import com.focusmother.android.service.MonitoringService
+import com.focusmother.android.ui.avatar.AvatarSetupActivity
+import com.focusmother.android.ui.avatar.Avatar3DView
 import com.focusmother.android.ui.theme.FocusMotherFocusTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -40,21 +43,40 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var usageMonitor: UsageMonitor
     private var isMonitoring by mutableStateOf(false)
+    private var hasAvatar by mutableStateOf(false)
+    private var avatarId by mutableStateOf<String?>(null)
 
     private val usageStatsPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { checkPermissionsAndUpdateUI() }
+
+    private val avatarSetupLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        // Reload avatar status after returning from setup
+        loadAvatarStatus()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         usageMonitor = UsageMonitor(this)
         loadMonitoringState()
+        loadAvatarStatus()
 
         setContent {
             FocusMotherFocusTheme {
                 MainScreen()
             }
+        }
+    }
+
+    private fun loadAvatarStatus() {
+        lifecycleScope.launch {
+            val database = FocusMotherDatabase.getDatabase(this@MainActivity)
+            val avatarConfig = database.avatarDao().getAvatar()
+            hasAvatar = avatarConfig != null
+            avatarId = avatarConfig?.readyPlayerMeId
         }
     }
 
@@ -116,7 +138,7 @@ class MainActivity : ComponentActivity() {
                     Spacer(modifier = Modifier.height(16.dp))
 
                     if (!hasPermission) {
-                        ZordonAvatar()
+                        ZordonAvatar(hasAvatar = hasAvatar, avatarId = avatarId)
                         ZordonSpeechBubble(
                             message = "Young warrior! I require access to monitor your digital realm. Grant me the Usage Access permission to guide you towards balance and discipline!"
                         )
@@ -133,9 +155,24 @@ class MainActivity : ComponentActivity() {
                             Text("Grant Permission to Zordon")
                         }
                     } else {
-                        ZordonAvatar()
+                        ZordonAvatar(hasAvatar = hasAvatar, avatarId = avatarId)
 
                         ZordonSpeechBubble(message = zordonMessage)
+
+                        // Show avatar creation button if no avatar exists
+                        if (!hasAvatar) {
+                            Button(
+                                onClick = { launchAvatarSetup() },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF7C0EDA)
+                                )
+                            ) {
+                                Icon(Icons.Default.Person, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Create Your Avatar")
+                            }
+                        }
 
                         MonitoringControlCard(
                             isMonitoring = isMonitoring,
@@ -161,7 +198,7 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
-    fun ZordonAvatar() {
+    fun ZordonAvatar(hasAvatar: Boolean, avatarId: String?) {
         val infiniteTransition = rememberInfiniteTransition(label = "glow")
         val glowAlpha by infiniteTransition.animateFloat(
             initialValue = 0.3f,
@@ -193,12 +230,19 @@ class MainActivity : ComponentActivity() {
                     )
             )
 
-            // Avatar
-            Image(
-                painter = painterResource(id = R.drawable.ic_zordon_avatar),
-                contentDescription = "Zordon Avatar",
-                modifier = Modifier.size(180.dp)
-            )
+            // Avatar - 3D or static
+            if (hasAvatar && avatarId != null) {
+                Avatar3DView(
+                    avatarId = avatarId,
+                    modifier = Modifier.size(180.dp)
+                )
+            } else {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_zordon_avatar),
+                    contentDescription = "Zordon Avatar",
+                    modifier = Modifier.size(180.dp)
+                )
+            }
         }
     }
 
@@ -487,5 +531,10 @@ class MainActivity : ComponentActivity() {
     private fun loadMonitoringState() {
         isMonitoring = getSharedPreferences("focus_mother_prefs", Context.MODE_PRIVATE)
             .getBoolean("monitoring_enabled", false)
+    }
+
+    private fun launchAvatarSetup() {
+        val intent = Intent(this, AvatarSetupActivity::class.java)
+        avatarSetupLauncher.launch(intent)
     }
 }

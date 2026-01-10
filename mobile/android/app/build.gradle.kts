@@ -11,7 +11,7 @@ android {
 
     defaultConfig {
         applicationId = "com.focusmother.android"
-        minSdk = 26  // Android 8.0 (required for UsageStatsManager)
+        minSdk = 28  // Increased to 28 because SceneView 2.0.0 requires it
         targetSdk = 34
         versionCode = 1
         versionName = "1.0.0"
@@ -74,6 +74,7 @@ dependencies {
 
     // ViewModel
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
+    implementation("androidx.compose.runtime:runtime-livedata:1.6.1")
 
     // Work Manager (for background tasks)
     implementation("androidx.work:work-runtime-ktx:2.9.0")
@@ -95,9 +96,9 @@ dependencies {
 
     // Room Database (local storage)
     val roomVersion = "2.6.1"
-    implementation("androidx.room:room-runtime:\$roomVersion")
-    implementation("androidx.room:room-ktx:\$roomVersion")
-    ksp("androidx.room:room-compiler:\$roomVersion")
+    implementation("androidx.room:room-runtime:$roomVersion")
+    implementation("androidx.room:room-ktx:$roomVersion")
+    ksp("androidx.room:room-compiler:$roomVersion")
 
     // SceneView (3D rendering for avatar)
     implementation("io.github.sceneview:sceneview:2.0.0")
@@ -111,9 +112,14 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
     testImplementation("androidx.arch.core:core-testing:2.2.0")
+    testImplementation("org.mockito:mockito-core:5.8.0")
+    testImplementation("org.mockito:mockito-inline:5.2.0")
+    testImplementation("org.mockito.kotlin:mockito-kotlin:5.2.1")
+    testImplementation("io.mockk:mockk:1.13.8")
+    testImplementation("io.mockk:mockk-android:1.13.8")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
-    androidTestImplementation("androidx.room:room-testing:\$roomVersion")
+    androidTestImplementation("androidx.room:room-testing:$roomVersion")
     androidTestImplementation("androidx.arch.core:core-testing:2.2.0")
     androidTestImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
     androidTestImplementation(platform("androidx.compose:compose-bom:2024.02.00"))

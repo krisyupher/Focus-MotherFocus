@@ -10,6 +10,7 @@ import com.focusmother.android.FocusMotherApplication
 import com.focusmother.android.R
 import com.focusmother.android.monitor.UsageMonitor
 import com.focusmother.android.ui.MainActivity
+import com.focusmother.android.ui.conversation.ConversationActivity
 import kotlinx.coroutines.*
 
 /**
@@ -73,20 +74,25 @@ class MonitoringService : Service() {
             if (currentApp != null && distractionPackages.contains(currentApp.packageName)) {
                 // User is in a distraction app
                 val dailyUsage = currentApp.totalTimeInForeground
-                
+
                 // CRITICAL: Set to 1 minute (60,000ms) for very aggressive testing
-                val usageThreshold = 60 * 1000L 
+                val usageThreshold = 60 * 1000L
 
                 if (dailyUsage > usageThreshold && shouldTriggerIntervention()) {
-                    triggerIntervention(currentApp.appName, dailyUsage)
-                    closeDistractionApp()
+                    launchConversation(
+                        currentApp = currentApp.packageName,
+                        interventionReason = "You've spent ${formatDuration(dailyUsage)} on ${currentApp.appName} today"
+                    )
                 }
             }
 
             // General continuous usage check
             val detection = usageMonitor.detectContinuousUsage(thresholdMinutes = 1) // Test: 1 min
             if (detection.isExcessive && shouldTriggerIntervention()) {
-                triggerIntervention("phone", detection.screenTime)
+                launchConversation(
+                    currentApp = null,
+                    interventionReason = "You've been on your phone continuously for ${detection.getFormattedScreenTime()}"
+                )
             }
 
             // Update foreground notification
@@ -97,56 +103,28 @@ class MonitoringService : Service() {
         }
     }
 
-    private fun closeDistractionApp() {
-        val intent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-            putExtra("show_intervention", true)
-        }
-        startActivity(intent)
-    }
-
     private fun shouldTriggerIntervention(): Boolean {
         val currentTime = System.currentTimeMillis()
         val timeSinceLastIntervention = currentTime - lastInterventionTime
         return timeSinceLastIntervention >= interventionCooldown
     }
 
-    private fun triggerIntervention(subject: String, duration: Long) {
+    /**
+     * Launches ConversationActivity for AI negotiation.
+     *
+     * @param currentApp Package name of the app triggering intervention (null for general usage)
+     * @param interventionReason Human-readable reason for intervention
+     */
+    private fun launchConversation(currentApp: String?, interventionReason: String) {
         lastInterventionTime = System.currentTimeMillis()
 
-        val formattedTime = formatDuration(duration)
-        val message = if (subject == "phone") {
-            "Rangers! I have observed you have spent $formattedTime in the digital realm. This excessive usage must cease! Step away from your device!"
-        } else {
-            "Rangers! I have detected $formattedTime spent on $subject! This is a waste of your potential. Return to FocusMother immediately!"
-        }
-
-        val alertIntent = Intent(this, MainActivity::class.java).apply {
+        val intent = Intent(this, ConversationActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-            putExtra("show_intervention", true)
-            putExtra("intervention_message", message)
+            putExtra(ConversationActivity.EXTRA_CURRENT_APP, currentApp)
+            putExtra(ConversationActivity.EXTRA_INTERVENTION_REASON, interventionReason)
+            putExtra(ConversationActivity.EXTRA_CONVERSATION_ID, 1L)
         }
-
-        val pendingIntent = PendingIntent.getActivity(
-            this,
-            INTERVENTION_REQUEST_CODE,
-            alertIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val notification = NotificationCompat.Builder(this, FocusMotherApplication.CHANNEL_ALERT_ID)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("⚡ Zordon Commands You!")
-            .setContentText(message)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_ALARM)
-            .setAutoCancel(true)
-            .setContentIntent(pendingIntent)
-            .setVibrate(longArrayOf(0, 400, 200, 400))
-            .build()
-
-        val notificationManager = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
-        notificationManager.notify(INTERVENTION_NOTIFICATION_ID, notification)
+        startActivity(intent)
     }
 
     private fun formatDuration(ms: Long): String {
@@ -209,8 +187,6 @@ class MonitoringService : Service() {
         const val ACTION_TAKE_BREAK = "com.focusmother.android.TAKE_BREAK"
         const val ACTION_REQUEST_TIME = "com.focusmother.android.REQUEST_TIME"
         private const val NOTIFICATION_ID = 1001
-        private const val INTERVENTION_NOTIFICATION_ID = 1002
-        private const val INTERVENTION_REQUEST_CODE = 100
         private const val CHECK_INTERVAL_MS = 2000L // Fast check for testing
     }
 }
