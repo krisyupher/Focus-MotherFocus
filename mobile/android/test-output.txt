@@ -12,109 +12,128 @@ or from Android Studio, click: `Refactor` > `Migrate BuildConfig to Gradle Build
 > Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
 > Task :app:preBuild UP-TO-DATE
 > Task :app:preDebugBuild UP-TO-DATE
-> Task :app:generateDebugBuildConfig
-> Task :app:checkDebugAarMetadata
-> Task :app:processDebugNavigationResources
-> Task :app:compileDebugNavigationResources
-> Task :app:generateDebugResValues
-> Task :app:mapDebugSourceSetPaths
-> Task :app:generateDebugResources
-> Task :app:packageDebugResources
-> Task :app:createDebugCompatibleScreenManifests
-> Task :app:extractDeepLinksDebug
-> Task :app:parseDebugLocalResources
-> Task :app:mergeDebugResources
-> Task :app:processDebugMainManifest
-> Task :app:processDebugManifest
+> Task :app:generateDebugBuildConfig UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:processDebugNavigationResources UP-TO-DATE
+> Task :app:compileDebugNavigationResources UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :app:kspDebugKotlin UP-TO-DATE
+> Task :app:compileDebugKotlin UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:compileDebugJavaWithJavac UP-TO-DATE
 > Task :app:preDebugUnitTestBuild UP-TO-DATE
-> Task :app:javaPreCompileDebugUnitTest
-> Task :app:javaPreCompileDebug
-> Task :app:buildKotlinToolingMetadata
+> Task :app:javaPreCompileDebugUnitTest UP-TO-DATE
+> Task :app:processDebugJavaRes UP-TO-DATE
+> Task :app:buildKotlinToolingMetadata UP-TO-DATE
 > Task :app:preReleaseBuild UP-TO-DATE
-> Task :app:generateReleaseBuildConfig
-> Task :app:processDebugManifestForPackage
-> Task :app:checkReleaseAarMetadata
-> Task :app:processReleaseNavigationResources
-> Task :app:compileReleaseNavigationResources
-> Task :app:generateReleaseResValues
-> Task :app:mapReleaseSourceSetPaths
-> Task :app:generateReleaseResources
-> Task :app:packageReleaseResources
-> Task :app:createReleaseCompatibleScreenManifests
-> Task :app:extractDeepLinksRelease
-> Task :app:parseReleaseLocalResources
-> Task :app:mergeReleaseResources
-> Task :app:processReleaseMainManifest
-> Task :app:processReleaseManifest
-> Task :app:processReleaseManifestForPackage
-> Task :app:javaPreCompileRelease
-> Task :app:preReleaseUnitTestBuild UP-TO-DATE
-> Task :app:javaPreCompileReleaseUnitTest
-> Task :app:processDebugResources
-> Task :app:processReleaseResources
-> Task :app:kspDebugKotlin
-> Task :app:kspReleaseKotlin
-> Task :app:compileDebugKotlin
-> Task :app:compileReleaseKotlin
-w: file:///C:/Users/crist/Documents/Develop/FocusMotherFocus/mobile/android/app/src/main/java/com/focusmother/android/ui/conversation/ConversationActivity.kt:296:45 '@property:Deprecated(...) val Icons.Filled.Send: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.Send.
-
-> Task :app:compileDebugKotlin
-w: file:///C:/Users/crist/Documents/Develop/FocusMotherFocus/mobile/android/app/src/main/java/com/focusmother/android/ui/conversation/ConversationActivity.kt:296:45 '@property:Deprecated(...) val Icons.Filled.Send: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.Send.
-
-> Task :app:compileDebugJavaWithJavac
-> Task :app:processDebugJavaRes
+> Task :app:generateReleaseBuildConfig UP-TO-DATE
+> Task :app:checkReleaseAarMetadata UP-TO-DATE
+> Task :app:processReleaseNavigationResources UP-TO-DATE
+> Task :app:compileReleaseNavigationResources UP-TO-DATE
+> Task :app:generateReleaseResValues UP-TO-DATE
+> Task :app:mapReleaseSourceSetPaths UP-TO-DATE
+> Task :app:generateReleaseResources UP-TO-DATE
 > Task :app:bundleDebugClassesToCompileJar
 > Task :app:bundleDebugClassesToRuntimeJar
-> Task :app:compileReleaseJavaWithJavac
-> Task :app:processReleaseJavaRes
-> Task :app:bundleReleaseClassesToCompileJar
-> Task :app:bundleReleaseClassesToRuntimeJar
+> Task :app:mergeReleaseResources UP-TO-DATE
+> Task :app:packageReleaseResources UP-TO-DATE
+> Task :app:parseReleaseLocalResources UP-TO-DATE
+> Task :app:createReleaseCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksRelease UP-TO-DATE
+> Task :app:processReleaseMainManifest UP-TO-DATE
+> Task :app:processReleaseManifest UP-TO-DATE
+> Task :app:processReleaseManifestForPackage UP-TO-DATE
+> Task :app:processReleaseResources UP-TO-DATE
+> Task :app:javaPreCompileRelease UP-TO-DATE
+> Task :app:preReleaseUnitTestBuild UP-TO-DATE
+> Task :app:javaPreCompileReleaseUnitTest UP-TO-DATE
 > Task :app:kspDebugUnitTestKotlin
-> Task :app:kspReleaseUnitTestKotlin
-
+> Task :app:kspReleaseKotlin
+> Task :app:compileReleaseKotlin
 > Task :app:compileDebugUnitTestKotlin
-e: file:///C:/Users/crist/Documents/Develop/FocusMotherFocus/mobile/android/app/src/test/java/com/focusmother/android/ui/conversation/ConversationViewModelTest.kt:88:49 Only safe (?.) or non-null asserted (!!.) calls are allowed on a nullable receiver of type 'kotlin.collections.List<com.focusmother.android.data.entity.ConversationMessage>?'.
-e: file:///C:/Users/crist/Documents/Develop/FocusMotherFocus/mobile/android/app/src/test/java/com/focusmother/android/ui/conversation/ConversationViewModelTest.kt:89:31 Only safe (?.) or non-null asserted (!!.) calls are allowed on a nullable receiver of type 'kotlin.collections.List<com.focusmother.android.data.entity.ConversationMessage>?'.
-e: file:///C:/Users/crist/Documents/Develop/FocusMotherFocus/mobile/android/app/src/test/java/com/focusmother/android/ui/conversation/ConversationViewModelTest.kt:90:34 Only safe (?.) or non-null asserted (!!.) calls are allowed on a nullable receiver of type 'kotlin.collections.List<com.focusmother.android.data.entity.ConversationMessage>?'.
-e: file:///C:/Users/crist/Documents/Develop/FocusMotherFocus/mobile/android/app/src/test/java/com/focusmother/android/ui/conversation/ConversationViewModelTest.kt:169:49 Only safe (?.) or non-null asserted (!!.) calls are allowed on a nullable receiver of type 'kotlin.collections.List<com.focusmother.android.data.entity.ConversationMessage>?'.
+> Task :app:compileReleaseJavaWithJavac UP-TO-DATE
+> Task :app:compileDebugUnitTestJavaWithJavac NO-SOURCE
+> Task :app:processDebugUnitTestJavaRes
 
-> Task :app:compileDebugUnitTestKotlin FAILED
+> Task :app:testDebugUnitTest
 
-> Task :app:compileReleaseUnitTestKotlin FAILED
-e: file:///C:/Users/crist/Documents/Develop/FocusMotherFocus/mobile/android/app/src/test/java/com/focusmother/android/ui/conversation/ConversationViewModelTest.kt:88:49 Only safe (?.) or non-null asserted (!!.) calls are allowed on a nullable receiver of type 'kotlin.collections.List<com.focusmother.android.data.entity.ConversationMessage>?'.
-e: file:///C:/Users/crist/Documents/Develop/FocusMotherFocus/mobile/android/app/src/test/java/com/focusmother/android/ui/conversation/ConversationViewModelTest.kt:89:31 Only safe (?.) or non-null asserted (!!.) calls are allowed on a nullable receiver of type 'kotlin.collections.List<com.focusmother.android.data.entity.ConversationMessage>?'.
-e: file:///C:/Users/crist/Documents/Develop/FocusMotherFocus/mobile/android/app/src/test/java/com/focusmother/android/ui/conversation/ConversationViewModelTest.kt:90:34 Only safe (?.) or non-null asserted (!!.) calls are allowed on a nullable receiver of type 'kotlin.collections.List<com.focusmother.android.data.entity.ConversationMessage>?'.
-e: file:///C:/Users/crist/Documents/Develop/FocusMotherFocus/mobile/android/app/src/test/java/com/focusmother/android/ui/conversation/ConversationViewModelTest.kt:169:49 Only safe (?.) or non-null asserted (!!.) calls are allowed on a nullable receiver of type 'kotlin.collections.List<com.focusmother.android.data.entity.ConversationMessage>?'.
+AvatarRepositoryTest > createAvatarFromPhoto handles API creation error FAILED
+    java.lang.NullPointerException at AvatarRepositoryTest.kt:99
 
-FAILURE: Build completed with 2 failures.
+AvatarRepositoryTest > createAvatarFromPhoto handles API creation error FAILED
+    org.mockito.exceptions.misusing.InvalidUseOfMatchersException at DefaultInternalRunner.java:89
 
-1: Task failed with an exception.
------------
+AvatarRepositoryTest > createAvatarFromPhoto handles network error FAILED
+    java.lang.NullPointerException at AvatarRepositoryTest.kt:117
+
+AvatarRepositoryTest > createAvatarFromPhoto handles network error FAILED
+    org.mockito.exceptions.misusing.InvalidUseOfMatchersException at DefaultInternalRunner.java:89
+
+AvatarRepositoryTest > createAvatarFromPhoto success flow FAILED
+    java.lang.NullPointerException at AvatarRepositoryTest.kt:65
+
+AvatarRepositoryTest > createAvatarFromPhoto success flow FAILED
+    org.mockito.exceptions.misusing.InvalidUseOfMatchersException at DefaultInternalRunner.java:89
+
+AvatarRepositoryTest > createAvatarFromPhoto handles invalid file FAILED
+    java.lang.NullPointerException at AvatarRepositoryTest.kt:85
+
+AvatarRepositoryTest > createAvatarFromPhoto handles invalid file FAILED
+    org.mockito.exceptions.misusing.UnfinishedVerificationException at DefaultInternalRunner.java:89
+
+AvatarRepositoryTest > pollAvatarStatus handles failed status from API FAILED
+    org.mockito.exceptions.misusing.InvalidUseOfMatchersException at DefaultInternalRunner.java:50
+
+AgreementEnforcerTest > checkViolations should handle mix of expired and active agreements FAILED
+    java.lang.AssertionError at AgreementEnforcerTest.kt:256
+
+NegotiationManagerTest > processMessage should continue negotiating when new time is proposed FAILED
+    java.lang.AssertionError at NegotiationManagerTest.kt:152
+
+NegotiationManagerTest > processMessage should force agreement after max negotiation rounds FAILED
+    java.lang.AssertionError at NegotiationManagerTest.kt:192
+
+NegotiationManagerTest > processMessage should transition to Rejected when user explicitly rejects FAILED
+    java.lang.AssertionError at NegotiationManagerTest.kt:86
+
+NegotiationManagerTest > processMessage should accept initial proposal with affirmative response FAILED
+    io.mockk.MockKException at NegotiationManagerTest.kt:128
+
+NegotiationManagerTest > processMessage should transition from ProposedTime to Negotiating when user counters FAILED
+    io.mockk.MockKException at NegotiationManagerTest.kt:114
+
+ResponseParserTest > parseDuration should handle decimal minutes by rounding down FAILED
+    java.lang.AssertionError at ResponseParserTest.kt:169
+
+ResponseParserTest > parseDuration should return null for negative numbers FAILED
+    java.lang.AssertionError at ResponseParserTest.kt:235
+
+AvatarSetupViewModelTest > isLoading is true during Processing state FAILED
+    java.lang.AssertionError at AvatarSetupViewModelTest.kt:299
+
+228 tests completed, 18 failed
+
+> Task :app:testDebugUnitTest FAILED
+
+FAILURE: Build failed with an exception.
+
 * What went wrong:
-Execution failed for task ':app:compileDebugUnitTestKotlin'.
-> A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
-   > Compilation error. See log for more details
+Execution failed for task ':app:testDebugUnitTest'.
+> There were failing tests. See the report at: file:///C:/Users/crist/Documents/Develop/FocusMotherFocus/mobile/android/app/build/reports/tests/testDebugUnitTest/index.html
 
 * Try:
-> Run with --stacktrace option to get the stack trace.
-> Run with --info or --debug option to get more log output.
 > Run with --scan to get full insights.
-> Get more help at https://help.gradle.org.
-==============================================================================
 
-2: Task failed with an exception.
------------
-* What went wrong:
-Execution failed for task ':app:compileReleaseUnitTestKotlin'.
-> A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
-   > Compilation error. See log for more details
-
-* Try:
-> Run with --stacktrace option to get the stack trace.
-> Run with --info or --debug option to get more log output.
-> Run with --scan to get full insights.
-> Get more help at https://help.gradle.org.
-==============================================================================
-
-BUILD FAILED in 1m 46s
-53 actionable tasks: 53 executed
+BUILD FAILED in 57s
+50 actionable tasks: 8 executed, 42 up-to-date

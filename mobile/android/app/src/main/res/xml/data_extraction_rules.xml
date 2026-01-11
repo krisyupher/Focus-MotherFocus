@@ -1,6 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <data-extraction-rules>
     <cloud-backup>
+        <!-- SECURITY: Exclude ALL sensitive data from cloud backup -->
+        <!-- API keys and settings -->
         <exclude domain="sharedpref" path="."/>
+        <!-- Room database contains conversations, agreements, usage history -->
+        <exclude domain="database" path="."/>
+        <!-- Encrypted adult content blocklist -->
+        <exclude domain="file" path="adult_blocklist.dat"/>
+        <!-- User avatar GLB files and thumbnails -->
+        <exclude domain="file" path="avatars/"/>
     </cloud-backup>
 </data-extraction-rules>

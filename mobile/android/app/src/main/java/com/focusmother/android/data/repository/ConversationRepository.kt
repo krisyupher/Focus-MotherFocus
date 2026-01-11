@@ -9,6 +9,7 @@ import com.focusmother.android.data.entity.ConversationMessage
 import com.focusmother.android.domain.ConversationContext
 import com.focusmother.android.domain.PromptBuilder
 import com.focusmother.android.util.SecureApiKeyProvider
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Repository for managing conversations with Claude AI.
@@ -32,6 +33,35 @@ class ConversationRepository(
     private val promptBuilder: PromptBuilder
 ) {
 
+    // SECURITY: Rate limiting to prevent API abuse and cost exploitation
+    private val lastRequestTime = AtomicLong(0)
+
+    companion object {
+        // SECURITY: Rate limiting constants
+        // Minimum interval between API requests (1 second)
+        // Prevents rapid-fire requests that could:
+        // - Exhaust user's API quota
+        // - Generate unexpected costs ($100+ if abused)
+        // - Trigger Anthropic's rate limits
+        private const val MIN_REQUEST_INTERVAL_MS = 1000L
+
+        // Maximum requests per hour (additional safety layer)
+        private const val MAX_REQUESTS_PER_HOUR = 100
+
+        // Track recent request timestamps for hourly limit
+        private val recentRequests = mutableListOf<Long>()
+
+        // PERFORMANCE: Conversation history pruning constants
+        // Keep messages for 30 days (30 * 24 * 60 * 60 * 1000)
+        private const val MESSAGE_RETENTION_PERIOD_MS = 30L * 24 * 60 * 60 * 1000
+
+        // Auto-prune after every 10 messages sent (to avoid excessive DB operations)
+        private const val AUTO_PRUNE_INTERVAL = 10
+
+        // Track message count for auto-pruning
+        private var messagesSinceLastPrune = 0
+    }
+
     /**
      * Sends a message to Claude AI and returns the response.
      *
@@ -54,6 +84,42 @@ class ConversationRepository(
         context: ConversationContext
     ): Result<String> {
         return try {
+            // SECURITY: Rate limiting check
+            val now = System.currentTimeMillis()
+            val timeSinceLastRequest = now - lastRequestTime.get()
+
+            // Check minimum interval between requests
+            if (timeSinceLastRequest < MIN_REQUEST_INTERVAL_MS) {
+                val waitTime = MIN_REQUEST_INTERVAL_MS - timeSinceLastRequest
+                return Result.failure(
+                    RateLimitException(
+                        "Request throttled. Please wait ${waitTime}ms before sending another message."
+                    )
+                )
+            }
+
+            // Check hourly request limit
+            synchronized(recentRequests) {
+                // Remove requests older than 1 hour
+                val oneHourAgo = now - (60 * 60 * 1000)
+                recentRequests.removeAll { it < oneHourAgo }
+
+                // Check if at limit
+                if (recentRequests.size >= MAX_REQUESTS_PER_HOUR) {
+                    return Result.failure(
+                        RateLimitException(
+                            "Hourly request limit reached ($MAX_REQUESTS_PER_HOUR requests/hour). Please try again later."
+                        )
+                    )
+                }
+
+                // Record this request
+                recentRequests.add(now)
+            }
+
+            // Update last request time
+            lastRequestTime.set(now)
+
             // Get API key
             val apiKey = apiKeyProvider.getApiKey()
                 ?: return Result.failure(IllegalStateException("API key not found"))
@@ -63,7 +129,14 @@ class ConversationRepository(
                 .takeLast(10)
 
             // Build system prompt with current context
-            val systemPrompt = promptBuilder.buildSystemPrompt(context)
+            // PERFORMANCE: Use prompt caching to reduce API costs
+            val systemPromptText = promptBuilder.buildSystemPrompt(context)
+            val systemPrompt = listOf(
+                com.focusmother.android.data.api.models.SystemBlock(
+                    text = systemPromptText,
+                    cache_control = com.focusmother.android.data.api.models.CacheControl()
+                )
+            )
 
             // Convert history to Claude message format
             val historyMessages = history.map { msg ->
@@ -111,6 +184,13 @@ class ConversationRepository(
             )
             conversationDao.insert(assistantMessage)
 
+            // PERFORMANCE: Auto-prune old messages periodically
+            messagesSinceLastPrune++
+            if (messagesSinceLastPrune >= AUTO_PRUNE_INTERVAL) {
+                pruneOldMessages()
+                messagesSinceLastPrune = 0
+            }
+
             // Return success
             Result.success(aiResponse)
         } catch (e: Exception) {
@@ -130,9 +210,49 @@ class ConversationRepository(
     }
 
     /**
+     * Prunes old conversation messages to prevent database bloat.
+     *
+     * PERFORMANCE: Automatically deletes messages older than MESSAGE_RETENTION_PERIOD_MS (30 days).
+     * This prevents the database from growing indefinitely and improves query performance.
+     *
+     * PRIVACY: Also serves as automatic data deletion for privacy compliance.
+     *
+     * @return Number of messages deleted
+     */
+    suspend fun pruneOldMessages(): Int {
+        val cutoffTime = System.currentTimeMillis() - MESSAGE_RETENTION_PERIOD_MS
+        return conversationDao.deleteOlderThan(cutoffTime)
+    }
+
+    /**
+     * Manually triggers conversation history pruning.
+     *
+     * Useful for settings UI where users can clean up old data.
+     *
+     * @param daysToKeep Number of days of history to retain (default: 30)
+     * @return Number of messages deleted
+     */
+    suspend fun pruneMessages(daysToKeep: Int = 30): Int {
+        val retentionPeriod = daysToKeep.toLong() * 24 * 60 * 60 * 1000
+        val cutoffTime = System.currentTimeMillis() - retentionPeriod
+        return conversationDao.deleteOlderThan(cutoffTime)
+    }
+
+    /**
+     * Gets total token usage across all messages.
+     *
+     * Useful for cost tracking and API usage monitoring.
+     *
+     * @return Total tokens used, or 0 if no messages
+     */
+    suspend fun getTotalTokenUsage(): Int {
+        return conversationDao.getTotalTokenUsage() ?: 0
+    }
+
+    /**
      * Clears all conversation history from database.
      *
-     * Used for testing and privacy purposes.
+     * PRIVACY: Used for complete data deletion when user requests it.
      */
     suspend fun clearHistory() {
         conversationDao.deleteAll()

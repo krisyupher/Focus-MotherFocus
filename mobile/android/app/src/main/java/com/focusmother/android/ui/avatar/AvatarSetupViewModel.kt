@@ -221,5 +221,7 @@ class AvatarSetupViewModel(
      */
     internal fun setStateForTesting(state: SetupState) {
         _setupState.value = state
+        // Update isLoading based on state
+        _isLoading.value = state is SetupState.Processing
     }
 }

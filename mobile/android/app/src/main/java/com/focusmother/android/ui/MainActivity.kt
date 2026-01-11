@@ -33,15 +33,21 @@ import com.focusmother.android.R
 import com.focusmother.android.data.database.FocusMotherDatabase
 import com.focusmother.android.monitor.UsageMonitor
 import com.focusmother.android.service.MonitoringService
+import com.focusmother.android.data.preferences.SettingsPreferences
+import com.focusmother.android.data.repository.SettingsRepository
+import com.focusmother.android.domain.CategoryManager
 import com.focusmother.android.ui.avatar.AvatarSetupActivity
 import com.focusmother.android.ui.avatar.Avatar3DView
+import com.focusmother.android.ui.onboarding.OnboardingActivity
 import com.focusmother.android.ui.theme.FocusMotherFocusTheme
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
     private lateinit var usageMonitor: UsageMonitor
+    private lateinit var settingsRepository: SettingsRepository
     private var isMonitoring by mutableStateOf(false)
     private var hasAvatar by mutableStateOf(false)
     private var avatarId by mutableStateOf<String?>(null)
@@ -60,13 +66,42 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Check if onboarding is completed
+        if (!isOnboardingCompleted()) {
+            val intent = Intent(this, OnboardingActivity::class.java)
+            startActivity(intent)
+            finish()
+            return
+        }
+
+        // Seed database on first launch after onboarding
+        seedDatabaseIfNeeded()
+
         usageMonitor = UsageMonitor(this)
+        settingsRepository = SettingsRepository(this)
         loadMonitoringState()
         loadAvatarStatus()
 
         setContent {
             FocusMotherFocusTheme {
                 MainScreen()
+            }
+        }
+    }
+
+    private fun isOnboardingCompleted(): Boolean {
+        return getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(KEY_ONBOARDING_COMPLETED, false)
+    }
+
+    private fun seedDatabaseIfNeeded() {
+        lifecycleScope.launch {
+            val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            if (!prefs.getBoolean(KEY_DATABASE_SEEDED_FROM_MAIN, false)) {
+                val database = FocusMotherDatabase.getDatabase(this@MainActivity)
+                val categoryManager = CategoryManager(database.appCategoryDao())
+                categoryManager.seedDatabase()
+                prefs.edit().putBoolean(KEY_DATABASE_SEEDED_FROM_MAIN, true).apply()
             }
         }
     }
@@ -88,6 +123,9 @@ class MainActivity : ComponentActivity() {
         var screenTimeMs by remember { mutableStateOf(0L) }
         var topApps by remember { mutableStateOf(listOf<com.focusmother.android.monitor.AppUsageInfo>()) }
         var zordonMessage by remember { mutableStateOf("") }
+        var showSettings by remember { mutableStateOf(false) }
+        var showAnalytics by remember { mutableStateOf(false) }
+        val settings by settingsRepository.settingsFlow.collectAsState(initial = SettingsPreferences())
 
         LaunchedEffect(Unit) {
             hasPermission = usageMonitor.hasUsageStatsPermission()
@@ -112,7 +150,33 @@ class MainActivity : ComponentActivity() {
         }
 
         Scaffold(
-            containerColor = Color(0xFF0A0A1A)
+            containerColor = Color(0xFF0A0A1A),
+            topBar = {
+                if (hasPermission) {
+                    TopAppBar(
+                        title = { Text("FocusMother", color = Color(0xFFE0E0E0)) },
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = Color(0xFF1A1A2E)
+                        ),
+                        actions = {
+                            IconButton(onClick = { showAnalytics = true }) {
+                                Icon(
+                                    Icons.Default.BarChart,
+                                    contentDescription = "Analytics",
+                                    tint = Color(0xFF7C0EDA)
+                                )
+                            }
+                            IconButton(onClick = { showSettings = true }) {
+                                Icon(
+                                    Icons.Default.Settings,
+                                    contentDescription = "Settings",
+                                    tint = Color(0xFF7C0EDA)
+                                )
+                            }
+                        }
+                    )
+                }
+            }
         ) { padding ->
             Box(
                 modifier = Modifier
@@ -158,6 +222,12 @@ class MainActivity : ComponentActivity() {
                         ZordonAvatar(hasAvatar = hasAvatar, avatarId = avatarId)
 
                         ZordonSpeechBubble(message = zordonMessage)
+
+                        // Daily Goal Indicator
+                        DailyGoalCard(
+                            goalMs = settings.dailyGoalMs,
+                            currentMs = screenTimeMs
+                        )
 
                         // Show avatar creation button if no avatar exists
                         if (!hasAvatar) {
@@ -536,5 +606,73 @@ class MainActivity : ComponentActivity() {
     private fun launchAvatarSetup() {
         val intent = Intent(this, AvatarSetupActivity::class.java)
         avatarSetupLauncher.launch(intent)
+    }
+
+    @Composable
+    fun DailyGoalCard(goalMs: Long, currentMs: Long) {
+        val goalHours = SettingsPreferences.msToHours(goalMs)
+        val progress = (currentMs.toFloat() / goalMs.toFloat()).coerceIn(0f, 1f)
+
+        val progressColor = when {
+            progress >= 1.0f -> Color(0xFFFF0000) // Red - exceeded
+            progress >= 0.8f -> Color(0xFFFF6B00) // Orange - warning
+            progress >= 0.6f -> Color(0xFFFFD700) // Yellow - caution
+            else -> Color(0xFF00FF00) // Green - good
+        }
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = Color(0xFF1A1A2E)
+            ),
+            border = androidx.compose.foundation.BorderStroke(2.dp, progressColor)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Daily Goal: ${goalHours}h",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = Color(0xFFE0E0E0),
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = formatScreenTime(currentMs),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = progressColor,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                LinearProgressIndicator(
+                    progress = progress,
+                    modifier = Modifier.fillMaxWidth(),
+                    color = progressColor,
+                    trackColor = Color(0xFF3A3A3A)
+                )
+
+                Text(
+                    text = if (progress >= 1.0f) {
+                        "Goal exceeded! Time to disconnect, warrior."
+                    } else {
+                        "${((1.0f - progress) * 100).toInt()}% remaining"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFFB0B0B0)
+                )
+            }
+        }
+    }
+
+    companion object {
+        private const val PREFS_NAME = "focus_mother_prefs"
+        private const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
+        private const val KEY_DATABASE_SEEDED_FROM_MAIN = "database_seeded_from_main"
     }
 }

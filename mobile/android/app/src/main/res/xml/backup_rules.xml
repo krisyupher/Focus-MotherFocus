@@ -1,4 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <full-backup-content>
-    <!-- Exclude specific files from backup -->
+    <!-- SECURITY: Exclude sensitive data from backup (Android 11 and below) -->
+    <!-- Encrypted API key storage -->
+    <exclude domain="sharedpref" path="secure_api_prefs.xml"/>
+    <!-- Room database contains conversations, agreements, usage history -->
+    <exclude domain="database" path="."/>
+    <!-- Encrypted adult content blocklist -->
+    <exclude domain="file" path="adult_blocklist.dat"/>
+    <!-- User avatar GLB files and thumbnails -->
+    <exclude domain="file" path="avatars/"/>
 </full-backup-content>

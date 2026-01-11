@@ -107,7 +107,9 @@ class SecureApiKeyProvider(private val context: Context) {
             val decryptedBytes = cipher.doFinal(encryptedBytes)
             String(decryptedBytes, Charsets.UTF_8)
         } catch (e: Exception) {
-            e.printStackTrace()
+            // SECURITY: Never log exception details for API key decryption
+            // Stack trace could expose encrypted key, IV, or implementation details
+            android.util.Log.e("SecureApiKeyProvider", "API key decryption failed - key may be corrupted")
             null
         }
     }

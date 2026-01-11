@@ -157,13 +157,52 @@ class AvatarRepository(
     }
 
     /**
-     * Deletes the current avatar from the database.
+     * Completely deletes the current avatar including all cached files.
      *
-     * Note: This does not delete cached GLB files. Use AvatarCacheManager.clearCache()
-     * to remove cached files.
+     * SECURITY: This method ensures complete data deletion for privacy compliance.
+     * It deletes:
+     * 1. GLB file (3D model containing biometric facial data)
+     * 2. Thumbnail image file
+     * 3. Database entry
+     *
+     * This prevents retention of sensitive biometric data after user requests deletion.
+     *
+     * @return true if avatar was deleted, false if no avatar existed
      */
-    suspend fun deleteAvatar() {
+    suspend fun deleteAvatar(): Boolean {
+        // Get current avatar to find file paths
+        val avatar = avatarDao.getAvatar() ?: return false
+
+        // Delete GLB file (contains biometric facial data)
+        try {
+            val glbFile = File(avatar.localGlbPath)
+            if (glbFile.exists()) {
+                val deleted = glbFile.delete()
+                if (!deleted) {
+                    android.util.Log.w("AvatarRepository", "Failed to delete GLB file: ${avatar.localGlbPath}")
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("AvatarRepository", "Error deleting GLB file", e)
+        }
+
+        // Delete thumbnail file
+        try {
+            val thumbnailFile = File(avatar.thumbnailPath)
+            if (thumbnailFile.exists()) {
+                val deleted = thumbnailFile.delete()
+                if (!deleted) {
+                    android.util.Log.w("AvatarRepository", "Failed to delete thumbnail file: ${avatar.thumbnailPath}")
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("AvatarRepository", "Error deleting thumbnail file", e)
+        }
+
+        // Delete database entry
         avatarDao.deleteAll()
+
+        return true
     }
 
     /**

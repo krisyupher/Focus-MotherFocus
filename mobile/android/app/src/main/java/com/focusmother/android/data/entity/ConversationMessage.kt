@@ -1,6 +1,7 @@
 package com.focusmother.android.data.entity
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
@@ -8,6 +9,10 @@ import androidx.room.PrimaryKey
  *
  * Stores both user and assistant messages for conversation context and history tracking.
  * Tracks token usage for cost management and includes model information for debugging.
+ *
+ * PERFORMANCE: Indexes added for frequently queried fields:
+ * - conversationId: Used in getConversation() queries
+ * - timestamp: Used for chronological ordering and pruning old messages
  *
  * @property id Unique identifier for the message
  * @property conversationId Foreign key linking messages to a conversation thread
@@ -17,7 +22,13 @@ import androidx.room.PrimaryKey
  * @property tokenCount Number of tokens used (for cost tracking and API management)
  * @property modelUsed The Claude model used to generate the response
  */
-@Entity(tableName = "conversation_messages")
+@Entity(
+    tableName = "conversation_messages",
+    indices = [
+        Index(value = ["conversationId"]),
+        Index(value = ["timestamp"])
+    ]
+)
 data class ConversationMessage(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,

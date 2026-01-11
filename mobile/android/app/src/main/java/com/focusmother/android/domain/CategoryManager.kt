@@ -225,6 +225,16 @@ class CategoryManager(
     }
 
     /**
+     * Gets the full category mapping for an app.
+     *
+     * @param packageName Android package name
+     * @return AppCategoryMapping if found in database, null otherwise
+     */
+    suspend fun getMapping(packageName: String): AppCategoryMapping? {
+        return appCategoryDao.getByPackage(packageName)
+    }
+
+    /**
      * Checks if an app is blocked.
      *
      * @param packageName Android package name

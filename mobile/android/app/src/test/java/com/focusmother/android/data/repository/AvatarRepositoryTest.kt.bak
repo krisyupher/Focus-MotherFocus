@@ -14,11 +14,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.Mock
-import org.mockito.kotlin.any
-import org.mockito.kotlin.anyOrNull
-import org.mockito.kotlin.never
-import org.mockito.kotlin.verify
-import org.mockito.kotlin.whenever
+import org.mockito.Mockito.*
 import org.mockito.junit.MockitoJUnitRunner
 import retrofit2.HttpException
 import retrofit2.Response
@@ -73,15 +69,8 @@ class AvatarRepositoryTest {
             status = "processing",
             url = null
         )
-        val completedStatus = AvatarStatusResponse(
-            id = "avatar-123",
-            status = "completed",
-            glbUrl = "https://example.com/avatar.glb",
-            thumbnailUrl = "https://example.com/thumb.png"
-        )
 
-        whenever(mockApiService.createAvatar(any(), anyOrNull())).thenReturn(creationResponse)
-        whenever(mockApiService.getAvatarStatus("avatar-123")).thenReturn(completedStatus)
+        `when`(mockApiService.createAvatar(any(), any())).thenReturn(creationResponse)
 
         // When
         val result = repository.createAvatarFromPhoto(testPhotoFile)
@@ -89,7 +78,7 @@ class AvatarRepositoryTest {
         // Then
         assertTrue(result.isSuccess)
         assertEquals("avatar-123", result.getOrNull())
-        verify(mockApiService).createAvatar(any(), anyOrNull())
+        verify(mockApiService).createAvatar(any(), any())
     }
 
     @Test
@@ -103,7 +92,7 @@ class AvatarRepositoryTest {
         // Then
         assertTrue(result.isFailure)
         assertTrue(result.exceptionOrNull()?.message?.contains("does not exist") == true)
-        verify(mockApiService, never()).createAvatar(any(), anyOrNull())
+        verify(mockApiService, never()).createAvatar(any(), any())
     }
 
     @Test
@@ -113,8 +102,8 @@ class AvatarRepositoryTest {
             400,
             "Bad request".toResponseBody()
         )
-        whenever(mockApiService.createAvatar(any(), anyOrNull()))
-            .thenAnswer { throw HttpException(errorResponse) }
+        `when`(mockApiService.createAvatar(any(), any()))
+            .thenThrow(HttpException(errorResponse))
 
         // When
         val result = repository.createAvatarFromPhoto(testPhotoFile)
@@ -127,8 +116,8 @@ class AvatarRepositoryTest {
     @Test
     fun `createAvatarFromPhoto handles network error`() = runTest {
         // Given
-        whenever(mockApiService.createAvatar(any(), anyOrNull()))
-            .thenAnswer { throw IOException("Network error") }
+        `when`(mockApiService.createAvatar(any(), any()))
+            .thenThrow(IOException("Network error"))
 
         // When
         val result = repository.createAvatarFromPhoto(testPhotoFile)
@@ -148,7 +137,7 @@ class AvatarRepositoryTest {
             thumbnailUrl = "https://example.com/thumb.png"
         )
 
-        whenever(mockApiService.getAvatarStatus("avatar-123"))
+        `when`(mockApiService.getAvatarStatus("avatar-123"))
             .thenReturn(completedResponse)
 
         // When
@@ -170,7 +159,7 @@ class AvatarRepositoryTest {
             thumbnailUrl = null
         )
 
-        whenever(mockApiService.getAvatarStatus("avatar-123"))
+        `when`(mockApiService.getAvatarStatus("avatar-123"))
             .thenReturn(failedResponse)
 
         // When
@@ -191,7 +180,7 @@ class AvatarRepositoryTest {
             thumbnailUrl = null
         )
 
-        whenever(mockApiService.getAvatarStatus("avatar-123"))
+        `when`(mockApiService.getAvatarStatus("avatar-123"))
             .thenReturn(processingResponse)
 
         // When - Only allow 2 attempts with short delay
@@ -213,7 +202,7 @@ class AvatarRepositoryTest {
             readyPlayerMeId = "avatar-123"
         )
 
-        whenever(mockAvatarDao.getAvatar()).thenReturn(avatarConfig)
+        `when`(mockAvatarDao.getAvatar()).thenReturn(avatarConfig)
 
         // When
         val result = repository.getAvatarConfig()
@@ -244,7 +233,7 @@ class AvatarRepositoryTest {
     @Test
     fun `hasAvatar returns true when avatar exists`() = runTest {
         // Given
-        whenever(mockAvatarDao.hasAvatar()).thenReturn(true)
+        `when`(mockAvatarDao.hasAvatar()).thenReturn(true)
 
         // When
         val hasAvatar = repository.hasAvatar()
@@ -256,7 +245,7 @@ class AvatarRepositoryTest {
     @Test
     fun `hasAvatar returns false when no avatar exists`() = runTest {
         // Given
-        whenever(mockAvatarDao.hasAvatar()).thenReturn(false)
+        `when`(mockAvatarDao.hasAvatar()).thenReturn(false)
 
         // When
         val hasAvatar = repository.hasAvatar()

@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    SECURITY: Network Security Configuration
+
+    Enforces secure network practices:
+    - Disables cleartext (HTTP) traffic entirely
+    - Requires TLS 1.2+ for all HTTPS connections
+    - Certificate pinning for critical API endpoints
+
+    Note: Certificate pins should be updated when certificates are rotated.
+    Use this command to extract current pins:
+
+    openssl s_client -connect api.anthropic.com:443 | openssl x509 -pubkey -noout | \
+    openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | base64
+-->
+<network-security-config>
+    <!-- SECURITY: Block all cleartext (HTTP) traffic for entire application -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <!-- Trust system certificate authorities -->
+            <certificates src="system"/>
+        </trust-anchors>
+    </base-config>
+
+    <!--
+        CERTIFICATE PINNING: Claude API (api.anthropic.com)
+
+        Pins should be updated before expiration date.
+        Include backup pins to prevent app breakage during certificate rotation.
+
+        TODO: Before production release, obtain actual certificate pins using:
+        openssl s_client -connect api.anthropic.com:443 | openssl x509 -pubkey -noout | \
+        openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | base64
+    -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">api.anthropic.com</domain>
+        <!--
+            TODO: Replace with actual pins before production release
+            Current pins are placeholders and will cause connection failures
+        -->
+        <!--
+        <pin-set expiration="2027-01-01">
+            <pin digest="SHA-256">PRIMARY_PIN_HASH_HERE</pin>
+            <pin digest="SHA-256">BACKUP_PIN_HASH_HERE</pin>
+        </pin-set>
+        -->
+    </domain-config>
+
+    <!--
+        CERTIFICATE PINNING: Ready Player Me API (api.readyplayer.me)
+
+        TODO: Before production release, obtain actual certificate pins using:
+        openssl s_client -connect api.readyplayer.me:443 | openssl x509 -pubkey -noout | \
+        openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | base64
+    -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">api.readyplayer.me</domain>
+        <!--
+            TODO: Replace with actual pins before production release
+        -->
+        <!--
+        <pin-set expiration="2027-01-01">
+            <pin digest="SHA-256">PRIMARY_PIN_HASH_HERE</pin>
+            <pin digest="SHA-256">BACKUP_PIN_HASH_HERE</pin>
+        </pin-set>
+        -->
+    </domain-config>
+
+    <!--
+        SECURITY NOTE: Certificate pinning commented out for development
+
+        Uncomment pin-set blocks before production release after obtaining actual pins.
+        Without pinning, app is vulnerable to MITM attacks via compromised CAs.
+
+        Update procedure:
+        1. Get current pins from servers (see commands above)
+        2. Get backup pins (usually intermediate CA cert)
+        3. Update pin-set blocks
+        4. Set expiration ~1 year ahead
+        5. Set reminder to update before expiration
+    -->
+</network-security-config>

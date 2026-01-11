@@ -1,6 +1,7 @@
 package com.focusmother.android.data.entity
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
@@ -8,6 +9,11 @@ import androidx.room.PrimaryKey
  *
  * An agreement can be for a specific app (e.g., Instagram) or general phone usage.
  * It tracks the agreed-upon duration, current status, and violation/completion timestamps.
+ *
+ * PERFORMANCE: Indexes added for frequently queried fields:
+ * - status: Used to query active agreements in MonitoringService
+ * - expiresAt: Used to check if agreements have expired
+ * - createdAt: Used for date range queries in analytics
  *
  * @property id Unique identifier for the agreement
  * @property appPackageName Package name of the app (null for general phone usage)
@@ -21,7 +27,14 @@ import androidx.room.PrimaryKey
  * @property completedAt Timestamp when agreement was completed successfully (null if not completed)
  * @property conversationId Foreign key to the conversation that created this agreement
  */
-@Entity(tableName = "agreements")
+@Entity(
+    tableName = "agreements",
+    indices = [
+        Index(value = ["status"]),
+        Index(value = ["expiresAt"]),
+        Index(value = ["createdAt"])
+    ]
+)
 data class Agreement(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,

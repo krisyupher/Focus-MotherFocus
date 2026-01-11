@@ -169,6 +169,17 @@ class UsageMonitor(private val context: Context) {
 
         return !usageStatsList.isNullOrEmpty()
     }
+
+    /**
+     * Get screen time for a specific date range.
+     *
+     * @param startTime Start timestamp
+     * @param endTime End timestamp
+     * @return Total screen time in milliseconds
+     */
+    fun getScreenTimeForDateRange(startTime: Long, endTime: Long): Long {
+        return getScreenTimeBetween(startTime, endTime)
+    }
 }
 
 /**
