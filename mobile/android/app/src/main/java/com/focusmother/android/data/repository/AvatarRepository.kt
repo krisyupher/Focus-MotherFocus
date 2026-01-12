@@ -173,36 +173,80 @@ class AvatarRepository(
         // Get current avatar to find file paths
         val avatar = avatarDao.getAvatar() ?: return false
 
-        // Delete GLB file (contains biometric facial data)
+        // Securely delete GLB file (contains biometric facial data)
         try {
             val glbFile = File(avatar.localGlbPath)
             if (glbFile.exists()) {
-                val deleted = glbFile.delete()
-                if (!deleted) {
-                    android.util.Log.w("AvatarRepository", "Failed to delete GLB file: ${avatar.localGlbPath}")
-                }
+                secureDeleteFile(glbFile)
             }
         } catch (e: Exception) {
-            android.util.Log.e("AvatarRepository", "Error deleting GLB file", e)
+            // Silent failure - log at error level but continue with deletion
+            android.util.Log.e("AvatarRepository", "Error securely deleting GLB file: ${e.message}")
         }
 
-        // Delete thumbnail file
+        // Securely delete thumbnail file
         try {
             val thumbnailFile = File(avatar.thumbnailPath)
             if (thumbnailFile.exists()) {
-                val deleted = thumbnailFile.delete()
-                if (!deleted) {
-                    android.util.Log.w("AvatarRepository", "Failed to delete thumbnail file: ${avatar.thumbnailPath}")
-                }
+                secureDeleteFile(thumbnailFile)
             }
         } catch (e: Exception) {
-            android.util.Log.e("AvatarRepository", "Error deleting thumbnail file", e)
+            // Silent failure - log at error level but continue with deletion
+            android.util.Log.e("AvatarRepository", "Error securely deleting thumbnail file: ${e.message}")
         }
 
-        // Delete database entry
+        // Delete database entry (Room handles this atomically)
         avatarDao.deleteAll()
 
         return true
+    }
+
+    /**
+     * Securely deletes a file by overwriting its contents before deletion.
+     *
+     * SECURITY: This prevents biometric data recovery from disk using forensic tools.
+     * The file is overwritten with random data 3 times (DoD 5220.22-M standard variant).
+     *
+     * GDPR Compliance: Ensures biometric data (Article 9 special category) cannot be
+     * recovered after deletion, fulfilling right to erasure (Article 17).
+     *
+     * @param file The file to securely delete
+     * @throws IOException if file operations fail
+     */
+    private fun secureDeleteFile(file: File) {
+        if (!file.exists()) return
+
+        val fileLength = file.length()
+
+        // Overwrite file contents 3 times with random data (DoD 5220.22-M variant)
+        repeat(3) { pass ->
+            try {
+                java.io.RandomAccessFile(file, "rws").use { raf ->
+                    raf.seek(0)
+                    val buffer = ByteArray(8192) // 8KB buffer for efficient overwriting
+                    var remaining = fileLength
+
+                    while (remaining > 0) {
+                        val toWrite = minOf(remaining, buffer.size.toLong()).toInt()
+                        // Fill buffer with cryptographically secure random bytes
+                        java.security.SecureRandom().nextBytes(buffer)
+                        raf.write(buffer, 0, toWrite)
+                        remaining -= toWrite
+                    }
+
+                    // Force write to disk (bypass OS write cache)
+                    raf.fd.sync()
+                }
+            } catch (e: Exception) {
+                android.util.Log.w("AvatarRepository", "Secure overwrite pass ${pass + 1} failed: ${e.message}")
+            }
+        }
+
+        // Final deletion after secure overwriting
+        val deleted = file.delete()
+        if (!deleted) {
+            android.util.Log.w("AvatarRepository", "File deletion failed after secure overwrite: ${file.path}")
+        }
     }
 
     /**

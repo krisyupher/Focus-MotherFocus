@@ -192,12 +192,29 @@ mobile/android/.cxx/
 mobile/android/.kotlin/
 mobile/android/app/.kotlin/
 
-# Android signing files (security critical)
+# Android signing files (SECURITY CRITICAL - Phase 8)
 *.keystore
 *.jks
+*.keystore.backup
 mobile/android/app/*.keystore
 mobile/android/app/*.jks
 mobile/android/release/
+mobile/android/keystore.properties
+mobile/android/signing.properties
+mobile/android/*.keystore
+mobile/android/focusmother-release.keystore
+keystore.base64.txt
+*.base64.txt
+
+# Firebase configuration (contains API keys)
+mobile/android/app/google-services.json
+google-services.json
+
+# Play Store assets (may contain sensitive info)
+mobile/android/play_store/screenshots/*.png
+mobile/android/play_store/graphics/*.png
+mobile/android/play_store/graphics/*.jpg
+mobile/android/play_store/promo-video.*
 
 # Android profiler
 mobile/android/captures/
@@ -225,6 +242,25 @@ docs/archive/
 # Temporary/debug files
 nul
 *.tmp
+
+# CI/CD artifacts (Phase 8)
+mobile/android/app/build/outputs/
+mobile/android/app/release/
+mobile/android/*.apk
+mobile/android/*.aab
+mobile/android/app/*.apk
+mobile/android/app/*.aab
+mobile/android/mapping.txt
+mobile/android/app/build/outputs/mapping/
+
+# GitHub Actions cache
+.github/.cache/
+
+# Test results and reports
+mobile/android/app/build/reports/
+mobile/android/app/build/test-results/
+mobile/android/test-results/
+mobile/android/build/reports/
 
 # Playwright
 /test-results/

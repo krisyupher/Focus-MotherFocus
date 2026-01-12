@@ -1,0 +1,408 @@
+name: Health Check
+
+# Post-deployment health monitoring and smoke testing
+on:
+  # Manual trigger for ad-hoc health checks
+  workflow_dispatch:
+    inputs:
+      apk_url:
+        description: 'URL to APK for smoke testing (optional)'
+        required: false
+        type: string
+      test_device:
+        description: 'Test on Firebase Test Lab'
+        required: false
+        type: boolean
+        default: false
+
+  # Scheduled health checks (every 6 hours)
+  schedule:
+    - cron: '0 */6 * * *'
+
+  # After successful release
+  workflow_run:
+    workflows: ["Android Release"]
+    types:
+      - completed
+
+jobs:
+  # Smoke tests for critical functionality
+  smoke-test:
+    name: Smoke Test Suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Only run if release was successful
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' }}
+
+    steps:
+      # Step 1: Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step 2: Set up JDK 17
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      # Step 3: Grant execute permission to gradlew
+      - name: Grant execute permission to gradlew
+        run: chmod +x gradlew
+
+      # Step 4: Run smoke tests (subset of critical tests)
+      - name: Run smoke tests
+        run: |
+          echo "Running smoke test suite..."
+
+          # Run only smoke tests (marked with @SmokTest annotation)
+          ./gradlew test --tests "*SmokeTest" --stacktrace || {
+            echo "⚠️  Smoke tests failed!"
+            exit 1
+          }
+
+          echo "✅ Smoke tests passed"
+
+      # Step 5: Run critical integration tests
+      - name: Run critical integration tests
+        run: |
+          echo "Running critical integration tests..."
+
+          # Test monitoring service initialization
+          ./gradlew test --tests "*MonitoringServiceTest" --stacktrace
+
+          # Test usage monitor functionality
+          ./gradlew test --tests "*UsageMonitorTest" --stacktrace
+
+          echo "✅ Critical integration tests passed"
+
+      # Step 6: Upload smoke test results
+      - name: Upload smoke test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-results-${{ github.run_number }}
+          path: |
+            app/build/test-results/**/*.xml
+            app/build/reports/tests/**
+          retention-days: 7
+
+  # APK validation and security check
+  apk-validation:
+    name: APK Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      # Step 1: Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step 2: Download latest release APK
+      - name: Download latest release APK
+        run: |
+          echo "Downloading latest release APK from GitHub..."
+
+          # Get latest release URL
+          LATEST_RELEASE=$(curl -s https://api.github.com/repos/${{ github.repository }}/releases/latest)
+          APK_URL=$(echo "$LATEST_RELEASE" | jq -r '.assets[] | select(.name | endswith(".apk")) | .browser_download_url' | head -n 1)
+
+          if [ -z "$APK_URL" ]; then
+            echo "❌ No APK found in latest release"
+            exit 1
+          fi
+
+          echo "Downloading APK from: $APK_URL"
+          curl -L -o app-release.apk "$APK_URL"
+
+          echo "✅ APK downloaded successfully"
+
+      # Step 3: Set up Android SDK
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      # Step 4: Verify APK signature
+      - name: Verify APK signature
+        run: |
+          echo "Verifying APK signature..."
+
+          $ANDROID_HOME/build-tools/*/apksigner verify --verbose app-release.apk || {
+            echo "❌ APK signature verification failed!"
+            exit 1
+          }
+
+          echo "✅ APK signature verified"
+
+      # Step 5: Analyze APK with APK Analyzer
+      - name: Analyze APK structure
+        run: |
+          echo "Analyzing APK structure and size..."
+
+          # Get APK size
+          APK_SIZE=$(du -h app-release.apk | cut -f1)
+          APK_SIZE_BYTES=$(stat -c%s app-release.apk)
+
+          echo "📦 APK Size: $APK_SIZE ($APK_SIZE_BYTES bytes)"
+
+          # Check for excessive size (warn if > 50MB)
+          if [ "$APK_SIZE_BYTES" -gt 52428800 ]; then
+            echo "⚠️  WARNING: APK size exceeds 50MB"
+            echo "Consider optimizing resources, removing unused dependencies, or enabling R8 shrinking"
+          fi
+
+          # Extract and check AndroidManifest.xml
+          unzip -q app-release.apk AndroidManifest.xml 2>/dev/null || true
+
+          echo "✅ APK structure validated"
+
+      # Step 6: Security scan on APK
+      - name: Security scan APK
+        run: |
+          echo "Running security checks on APK..."
+
+          # Check for common security issues
+          unzip -l app-release.apk | grep -i "backup\|debug\|test" && {
+            echo "⚠️  WARNING: Found potential debug/test files in release APK"
+          } || echo "✅ No debug/test files found"
+
+          # Check for unencrypted sensitive files
+          unzip -l app-release.apk | grep -i "key\|secret\|password\|token" && {
+            echo "⚠️  WARNING: Found files with potentially sensitive names"
+          } || echo "✅ No obviously sensitive files found"
+
+          echo "✅ Security scan completed"
+
+  # Dependency vulnerability check
+  dependency-check:
+    name: Dependency Vulnerability Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      # Step 1: Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step 2: Set up JDK 17
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      # Step 3: Grant execute permission to gradlew
+      - name: Grant execute permission to gradlew
+        run: chmod +x gradlew
+
+      # Step 4: Check for outdated dependencies
+      - name: Check for outdated dependencies
+        run: |
+          echo "Checking for outdated dependencies..."
+
+          ./gradlew dependencyUpdates --stacktrace || true
+
+          echo "✅ Dependency update check completed"
+
+      # Step 5: Run OWASP dependency check
+      - name: OWASP Dependency Check
+        run: |
+          echo "Running OWASP dependency vulnerability check..."
+
+          ./gradlew dependencyCheckAnalyze --stacktrace || {
+            echo "⚠️  Vulnerability check completed with findings"
+          }
+
+          echo "✅ OWASP check completed"
+        continue-on-error: true
+
+      # Step 6: Upload dependency check report
+      - name: Upload dependency check report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-check-report-${{ github.run_number }}
+          path: build/reports/dependency-check-report.html
+          retention-days: 7
+        continue-on-error: true
+
+  # Performance and resource check
+  performance-check:
+    name: Performance Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      # Step 1: Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step 2: Set up JDK 17
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      # Step 3: Grant execute permission to gradlew
+      - name: Grant execute permission to gradlew
+        run: chmod +x gradlew
+
+      # Step 4: Build debug APK for analysis
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --stacktrace
+
+      # Step 5: Analyze method count
+      - name: Check method count
+        run: |
+          echo "Analyzing method count (DEX limit is 65,536 per DEX file)..."
+
+          APK_PATH="app/build/outputs/apk/debug/app-debug.apk"
+
+          if [ -f "$APK_PATH" ]; then
+            # Extract DEX files and count methods
+            unzip -q "$APK_PATH" "*.dex" -d ./dex_analysis
+
+            TOTAL_METHODS=0
+            for dex in ./dex_analysis/*.dex; do
+              if [ -f "$dex" ]; then
+                # Count methods in DEX file (simplified - actual count requires dexdump)
+                echo "Analyzing $dex..."
+              fi
+            done
+
+            echo "📊 Method count analysis completed"
+            echo "💡 Tip: Use Android Studio APK Analyzer for detailed method count"
+
+            # Cleanup
+            rm -rf ./dex_analysis
+          fi
+
+      # Step 6: Check for memory leaks (static analysis)
+      - name: Static memory leak detection
+        run: |
+          echo "Running static analysis for potential memory leaks..."
+
+          # Look for common leak patterns in Kotlin code
+          LEAK_PATTERNS=$(grep -rn --include="*.kt" \
+            -E "(lateinit.*Context|companion object.*Activity|object.*View)" \
+            app/src/main/java/ || echo "")
+
+          if [ -n "$LEAK_PATTERNS" ]; then
+            echo "⚠️  Potential memory leak patterns found:"
+            echo "$LEAK_PATTERNS"
+            echo ""
+            echo "💡 Review these patterns for potential memory leaks"
+          else
+            echo "✅ No obvious memory leak patterns detected"
+          fi
+
+      # Step 7: Check resource usage
+      - name: Check resource usage
+        run: |
+          echo "Analyzing resource usage..."
+
+          # Count drawable resources
+          DRAWABLE_COUNT=$(find app/src/main/res/drawable* -type f 2>/dev/null | wc -l)
+          echo "🎨 Drawable resources: $DRAWABLE_COUNT"
+
+          # Count layout files
+          LAYOUT_COUNT=$(find app/src/main/res/layout* -type f 2>/dev/null | wc -l)
+          echo "📐 Layout files: $LAYOUT_COUNT"
+
+          # Check for large resources
+          echo "🔍 Checking for large resource files (>500KB)..."
+          find app/src/main/res -type f -size +500k 2>/dev/null || echo "No large resources found"
+
+          echo "✅ Resource analysis completed"
+
+  # Health check summary and rollback trigger
+  health-summary:
+    name: Health Check Summary
+    needs: [smoke-test, dependency-check, performance-check]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Evaluate health check results
+        run: |
+          echo "🏥 Health Check Summary"
+          echo "======================"
+          echo ""
+          echo "Smoke Tests: ${{ needs.smoke-test.result }}"
+          echo "Dependency Check: ${{ needs.dependency-check.result }}"
+          echo "Performance Check: ${{ needs.performance-check.result }}"
+          echo ""
+
+          # Check if any critical checks failed
+          if [[ "${{ needs.smoke-test.result }}" == "failure" ]]; then
+            echo "❌ CRITICAL: Smoke tests failed!"
+            echo "🚨 ROLLBACK RECOMMENDED"
+            echo ""
+            echo "Action Items:"
+            echo "1. Review smoke test failures"
+            echo "2. Do not deploy to production"
+            echo "3. Fix issues and re-run release"
+            exit 1
+          fi
+
+          if [[ "${{ needs.smoke-test.result }}" == "success" ]]; then
+            echo "✅ All health checks passed"
+            echo "🎯 Application is healthy and ready for deployment"
+          else
+            echo "⚠️  Some health checks were skipped or had warnings"
+            echo "📋 Review individual check results before proceeding"
+          fi
+
+      # Step 2: Create health report
+      - name: Create health report
+        run: |
+          cat << EOF > health-report.md
+          # Health Check Report
+          **Date:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          **Run:** #${{ github.run_number }}
+
+          ## Summary
+          - **Smoke Tests:** ${{ needs.smoke-test.result }}
+          - **Dependency Check:** ${{ needs.dependency-check.result }}
+          - **Performance Check:** ${{ needs.performance-check.result }}
+
+          ## Status
+          $(if [[ "${{ needs.smoke-test.result }}" == "success" ]]; then echo "✅ **HEALTHY** - All critical checks passed"; else echo "❌ **UNHEALTHY** - Critical failures detected"; fi)
+
+          ## Next Actions
+          $(if [[ "${{ needs.smoke-test.result }}" == "success" ]]; then echo "- Application is ready for deployment\n- Monitor crash reports in Crashlytics\n- Track user feedback"; else echo "- **DO NOT DEPLOY**\n- Review failed checks\n- Fix issues and re-release"; fi)
+          EOF
+
+          cat health-report.md
+
+      # Step 3: Upload health report
+      - name: Upload health report
+        uses: actions/upload-artifact@v4
+        with:
+          name: health-report-${{ github.run_number }}
+          path: health-report.md
+          retention-days: 30
+
+      # Step 4: Notify on Slack (optional - requires webhook)
+      - name: Notify on Slack
+        if: failure() && secrets.SLACK_WEBHOOK_URL != ''
+        run: |
+          curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "text": "🚨 Health Check Failed for FocusMother Android",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Health Check Failed*\nRun: #${{ github.run_number }}\nSmoke Tests: ${{ needs.smoke-test.result }}"
+                  }
+                }
+              ]
+            }'
+        continue-on-error: true

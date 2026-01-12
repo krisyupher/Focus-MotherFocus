@@ -1,0 +1,335 @@
+name: Android CI
+
+# Trigger on push to main/master and all pull requests
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+# Cancel in-progress runs when a new workflow is triggered on the same branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # Step 1: Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step 2: Set up JDK 17 (required for Android Gradle plugin and Kotlin 2.0)
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      # Step 3: Grant execute permission to gradlew
+      - name: Grant execute permission to gradlew
+        run: chmod +x gradlew
+
+      # Step 4: Cache Gradle dependencies for faster builds
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      # Step 5: Run lint checks
+      - name: Run lint checks
+        run: ./gradlew lint --stacktrace
+
+      # Step 6: Upload lint results
+      - name: Upload lint results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-results
+          path: |
+            app/build/reports/lint-results-*.html
+            app/build/reports/lint-results-*.xml
+          retention-days: 14
+
+      # Step 7: Run unit tests
+      - name: Run unit tests
+        run: ./gradlew test --stacktrace
+
+      # Step 8: Generate test coverage report (JaCoCo)
+      - name: Generate test coverage report
+        run: ./gradlew jacocoTestReport --stacktrace
+        continue-on-error: true
+
+      # Step 9: Upload test results
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            app/build/test-results/**/*.xml
+            app/build/reports/tests/**
+          retention-days: 14
+
+      # Step 10: Upload coverage reports
+      - name: Upload coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-reports
+          path: |
+            app/build/reports/jacoco/**
+          retention-days: 14
+        continue-on-error: true
+
+      # Step 11: Build debug APK
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --stacktrace
+
+      # Step 12: Upload debug APK artifact
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-${{ github.sha }}
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+
+      # Step 13: Test report summary
+      - name: Publish test report
+        uses: mikepenz/action-junit-report@v4
+        if: always()
+        with:
+          report_paths: '**/build/test-results/test**/TEST-*.xml'
+          check_name: 'Test Results'
+          detailed_summary: true
+          include_passed: true
+
+  security-scan:
+    name: Security Scanning
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      # Step 1: Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step 2: Set up JDK 17
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      # Step 3: Grant execute permission to gradlew
+      - name: Grant execute permission to gradlew
+        run: chmod +x gradlew
+
+      # Step 4: Cache Gradle dependencies
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      # Step 5: Run dependency vulnerability check
+      - name: Run dependency vulnerability check
+        run: ./gradlew dependencyCheckAnalyze --stacktrace
+        continue-on-error: true
+
+      # Step 6: Upload dependency check report
+      - name: Upload dependency check report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-check-report
+          path: build/reports/dependency-check-report.html
+          retention-days: 14
+        continue-on-error: true
+
+      # Step 7: Secret scanning with TruffleHog
+      - name: TruffleHog Secret Scanning
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --debug --only-verified
+
+      # Step 8: Detect hardcoded secrets with custom grep
+      - name: Detect hardcoded secrets
+        run: |
+          echo "Scanning for potential hardcoded secrets..."
+
+          # Check for common API key patterns (excluding comments and test files)
+          if grep -rn --include="*.kt" --include="*.java" --exclude-dir=".git" --exclude-dir="build" \
+            -E "(api_key|apiKey|API_KEY|secret|Secret|password|Password|token|Token).*=.*\"[a-zA-Z0-9]{20,}\"" . ; then
+            echo "❌ WARNING: Potential hardcoded secrets found!"
+            echo "Please review the above matches and ensure no real secrets are committed."
+            # Don't fail the build, just warn
+          else
+            echo "✅ No obvious hardcoded secrets detected."
+          fi
+
+      # Step 9: Check for missing security configurations
+      - name: Security configuration check
+        run: |
+          echo "Checking for security best practices..."
+
+          # Check if network security config exists
+          if [ -f "app/src/main/res/xml/network_security_config.xml" ]; then
+            echo "✅ Network security config found"
+          else
+            echo "⚠️  WARNING: network_security_config.xml not found"
+          fi
+
+          # Check if backup is disabled in manifest
+          if grep -q 'android:allowBackup="false"' app/src/main/AndroidManifest.xml; then
+            echo "✅ Backup disabled in manifest"
+          else
+            echo "⚠️  WARNING: Consider disabling backup for sensitive data"
+          fi
+
+          # Check if debuggable is not set to true in release
+          if grep -q 'android:debuggable="true"' app/src/main/AndroidManifest.xml; then
+            echo "❌ ERROR: android:debuggable should not be hardcoded to true"
+            exit 1
+          else
+            echo "✅ No hardcoded debuggable=true found"
+          fi
+
+  build-quality:
+    name: Build Quality Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      # Step 1: Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step 2: Set up JDK 17
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      # Step 3: Grant execute permission to gradlew
+      - name: Grant execute permission to gradlew
+        run: chmod +x gradlew
+
+      # Step 4: Cache Gradle dependencies
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      # Step 5: Check Kotlin code style with ktlint
+      - name: Run ktlint
+        run: ./gradlew ktlintCheck --stacktrace
+        continue-on-error: true
+
+      # Step 6: Run detekt for static code analysis
+      - name: Run detekt
+        run: ./gradlew detekt --stacktrace
+        continue-on-error: true
+
+      # Step 7: Upload ktlint results
+      - name: Upload ktlint results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ktlint-results
+          path: app/build/reports/ktlint/**
+          retention-days: 14
+        continue-on-error: true
+
+      # Step 8: Upload detekt results
+      - name: Upload detekt results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: detekt-results
+          path: app/build/reports/detekt/**
+          retention-days: 14
+        continue-on-error: true
+
+      # Step 9: Check for TODO/FIXME comments
+      - name: Check for TODO/FIXME
+        run: |
+          echo "Searching for TODO and FIXME comments..."
+          TODO_COUNT=$(grep -rn --include="*.kt" --include="*.java" --exclude-dir=".git" --exclude-dir="build" "TODO\|FIXME" . | wc -l || echo 0)
+          echo "Found $TODO_COUNT TODO/FIXME comments"
+
+          if [ "$TODO_COUNT" -gt 0 ]; then
+            echo "⚠️  Consider addressing these before release:"
+            grep -rn --include="*.kt" --include="*.java" --exclude-dir=".git" --exclude-dir="build" "TODO\|FIXME" . || true
+          fi
+
+      # Step 10: Analyze APK size (debug build)
+      - name: Build and analyze debug APK
+        run: |
+          ./gradlew assembleDebug --stacktrace
+
+          if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
+            APK_SIZE=$(du -h app/build/outputs/apk/debug/app-debug.apk | cut -f1)
+            APK_SIZE_BYTES=$(stat -c%s app/build/outputs/apk/debug/app-debug.apk)
+            echo "📦 Debug APK size: $APK_SIZE ($APK_SIZE_BYTES bytes)"
+
+            # Warn if APK is larger than 50MB
+            if [ "$APK_SIZE_BYTES" -gt 52428800 ]; then
+              echo "⚠️  WARNING: APK size exceeds 50MB. Consider optimizing resources."
+            fi
+          fi
+
+  # Job summary
+  ci-summary:
+    name: CI Summary
+    runs-on: ubuntu-latest
+    needs: [test, security-scan, build-quality]
+    if: always()
+
+    steps:
+      - name: Check overall CI status
+        run: |
+          echo "CI Pipeline Summary:"
+          echo "===================="
+          echo "Test Job: ${{ needs.test.result }}"
+          echo "Security Scan: ${{ needs.security-scan.result }}"
+          echo "Build Quality: ${{ needs.build-quality.result }}"
+
+          if [[ "${{ needs.test.result }}" == "failure" ]]; then
+            echo "❌ Tests failed. Please fix failing tests before merging."
+            exit 1
+          fi
+
+          if [[ "${{ needs.security-scan.result }}" == "failure" ]]; then
+            echo "❌ Security scan failed. Please address security issues."
+            exit 1
+          fi
+
+          if [[ "${{ needs.test.result }}" == "success" && "${{ needs.security-scan.result }}" == "success" ]]; then
+            echo "✅ All critical checks passed!"
+          fi

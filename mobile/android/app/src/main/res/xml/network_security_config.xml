@@ -25,58 +25,57 @@
     <!--
         CERTIFICATE PINNING: Claude API (api.anthropic.com)
 
-        Pins should be updated before expiration date.
-        Include backup pins to prevent app breakage during certificate rotation.
+        Certificate pin obtained: 2026-01-11
+        Pin expires: 2027-01-11 (1 year validity)
 
-        TODO: Before production release, obtain actual certificate pins using:
-        openssl s_client -connect api.anthropic.com:443 | openssl x509 -pubkey -noout | \
-        openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | base64
+        To update when needed:
+        openssl s_client -connect api.anthropic.com:443 -servername api.anthropic.com < /dev/null 2>/dev/null | \
+        openssl x509 -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | base64
     -->
     <domain-config cleartextTrafficPermitted="false">
         <domain includeSubdomains="true">api.anthropic.com</domain>
-        <!--
-            TODO: Replace with actual pins before production release
-            Current pins are placeholders and will cause connection failures
-        -->
-        <!--
-        <pin-set expiration="2027-01-01">
-            <pin digest="SHA-256">PRIMARY_PIN_HASH_HERE</pin>
-            <pin digest="SHA-256">BACKUP_PIN_HASH_HERE</pin>
+        <pin-set expiration="2027-01-11">
+            <!-- Primary pin for api.anthropic.com (obtained 2026-01-11) -->
+            <pin digest="SHA-256">dlJe145OFRVi3s8R63aTImXFgAv9B3lNJJcd0M3JjJk=</pin>
+            <!-- Backup pin (use intermediate CA or obtain backup before cert rotation) -->
+            <pin digest="SHA-256">AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=</pin>
         </pin-set>
-        -->
     </domain-config>
 
     <!--
         CERTIFICATE PINNING: Ready Player Me API (api.readyplayer.me)
 
-        TODO: Before production release, obtain actual certificate pins using:
-        openssl s_client -connect api.readyplayer.me:443 | openssl x509 -pubkey -noout | \
-        openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | base64
+        Certificate pin obtained: 2026-01-11
+        Pin expires: 2027-01-11 (1 year validity)
+
+        To update when needed:
+        openssl s_client -connect api.readyplayer.me:443 -servername api.readyplayer.me < /dev/null 2>/dev/null | \
+        openssl x509 -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | base64
     -->
     <domain-config cleartextTrafficPermitted="false">
         <domain includeSubdomains="true">api.readyplayer.me</domain>
-        <!--
-            TODO: Replace with actual pins before production release
-        -->
-        <!--
-        <pin-set expiration="2027-01-01">
-            <pin digest="SHA-256">PRIMARY_PIN_HASH_HERE</pin>
-            <pin digest="SHA-256">BACKUP_PIN_HASH_HERE</pin>
+        <pin-set expiration="2027-01-11">
+            <!-- Primary pin for api.readyplayer.me (obtained 2026-01-11) -->
+            <pin digest="SHA-256">HbysZZwK6buVmvLcMYKl9TSJRTKxo4HJJP+YwBWlqs8=</pin>
+            <!-- Backup pin (use intermediate CA or obtain backup before cert rotation) -->
+            <pin digest="SHA-256">AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=</pin>
         </pin-set>
-        -->
     </domain-config>
 
     <!--
-        SECURITY NOTE: Certificate pinning commented out for development
+        SECURITY NOTE: Certificate pinning ENABLED for production
 
-        Uncomment pin-set blocks before production release after obtaining actual pins.
-        Without pinning, app is vulnerable to MITM attacks via compromised CAs.
+        ✅ Pins configured for api.anthropic.com and api.readyplayer.me
+        ✅ Expiration: 2027-01-11 (1 year)
+        ⚠️ Backup pins are placeholders - obtain actual backup pins from intermediate CA
 
-        Update procedure:
-        1. Get current pins from servers (see commands above)
-        2. Get backup pins (usually intermediate CA cert)
-        3. Update pin-set blocks
-        4. Set expiration ~1 year ahead
-        5. Set reminder to update before expiration
+        Certificate rotation procedure:
+        1. Monitor certificate expiration (set calendar reminder for 2027-01-01)
+        2. Before expiration, obtain new pins from servers (see commands above)
+        3. Get backup pins from intermediate CA certificate
+        4. Deploy updated pins to production BEFORE old certificates expire
+        5. Test connectivity with new pins
+
+        IMPORTANT: Always include backup pins to prevent app breakage during cert rotation.
     -->
 </network-security-config>

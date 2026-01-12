@@ -75,6 +75,22 @@
             android:theme="@style/Theme.FocusMotherFocus"
             android:screenOrientation="portrait" />
 
+        <!-- Privacy Policy Screen -->
+        <activity
+            android:name=".ui.legal.PrivacyPolicyActivity"
+            android:exported="false"
+            android:theme="@style/Theme.FocusMotherFocus"
+            android:parentActivityName=".ui.MainActivity"
+            android:screenOrientation="portrait" />
+
+        <!-- Terms of Service Screen -->
+        <activity
+            android:name=".ui.legal.TermsOfServiceActivity"
+            android:exported="false"
+            android:theme="@style/Theme.FocusMotherFocus"
+            android:parentActivityName=".ui.MainActivity"
+            android:screenOrientation="portrait" />
+
         <!-- Monitoring Foreground Service -->
         <service
             android:name=".service.MonitoringService"

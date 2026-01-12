@@ -1,0 +1,439 @@
+name: Android Release
+
+# Trigger on manual workflow dispatch or version tags
+on:
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: 'Version name (e.g., 1.0.0)'
+        required: true
+        type: string
+      version_code:
+        description: 'Version code (integer, e.g., 1)'
+        required: true
+        type: string
+      release_notes:
+        description: 'Release notes'
+        required: false
+        type: string
+        default: 'Bug fixes and improvements'
+      deploy_to_play:
+        description: 'Deploy to Google Play internal track'
+        required: false
+        type: boolean
+        default: false
+  push:
+    tags:
+      - 'v*.*.*'  # Trigger on version tags like v1.0.0
+
+# Prevent concurrent releases
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  # Java version for Android build
+  JAVA_VERSION: '17'
+
+jobs:
+  # Pre-release validation
+  validate:
+    name: Pre-Release Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    outputs:
+      version_name: ${{ steps.version.outputs.version_name }}
+      version_code: ${{ steps.version.outputs.version_code }}
+
+    steps:
+      # Step 1: Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for changelog generation
+
+      # Step 2: Extract version from tag or input
+      - name: Extract version information
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            # Extract from git tag (e.g., v1.0.0 -> 1.0.0)
+            VERSION_NAME=${GITHUB_REF#refs/tags/v}
+            echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
+
+            # Generate version code from tag (e.g., 1.0.0 -> 10000)
+            IFS='.' read -ra VERSION_PARTS <<< "$VERSION_NAME"
+            VERSION_CODE=$((${VERSION_PARTS[0]} * 10000 + ${VERSION_PARTS[1]} * 100 + ${VERSION_PARTS[2]}))
+            echo "version_code=$VERSION_CODE" >> $GITHUB_OUTPUT
+          else
+            # Use manual input
+            echo "version_name=${{ github.event.inputs.version_name }}" >> $GITHUB_OUTPUT
+            echo "version_code=${{ github.event.inputs.version_code }}" >> $GITHUB_OUTPUT
+          fi
+
+          echo "Building version: $(cat $GITHUB_OUTPUT | grep version_name)"
+
+      # Step 3: Set up JDK 17
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      # Step 4: Grant execute permission to gradlew
+      - name: Grant execute permission to gradlew
+        run: chmod +x gradlew
+
+      # Step 5: Run all tests
+      - name: Run unit tests
+        run: ./gradlew test --stacktrace
+
+      # Step 6: Run lint checks
+      - name: Run lint checks
+        run: ./gradlew lint --stacktrace
+
+      # Step 7: Upload test results
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-test-results
+          path: |
+            app/build/test-results/**/*.xml
+            app/build/reports/tests/**
+          retention-days: 30
+
+      # Step 8: Upload lint results
+      - name: Upload lint results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-lint-results
+          path: |
+            app/build/reports/lint-results-*.html
+            app/build/reports/lint-results-*.xml
+          retention-days: 30
+
+  # Build release APK and AAB
+  build:
+    name: Build Release
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      # Step 1: Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step 2: Set up JDK 17
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      # Step 3: Grant execute permission to gradlew
+      - name: Grant execute permission to gradlew
+        run: chmod +x gradlew
+
+      # Step 4: Cache Gradle dependencies
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-release-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-release-
+            ${{ runner.os }}-gradle-
+
+      # Step 5: Decode and prepare keystore
+      - name: Decode keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_FILE }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "❌ ERROR: KEYSTORE_FILE secret is not set!"
+            echo "Please add the following secrets to your repository:"
+            echo "  - KEYSTORE_FILE (base64 encoded keystore)"
+            echo "  - KEYSTORE_PASSWORD"
+            echo "  - KEY_ALIAS"
+            echo "  - KEY_PASSWORD"
+            exit 1
+          fi
+
+          echo "$KEYSTORE_BASE64" | base64 -d > release-keystore.jks
+          echo "✅ Keystore decoded successfully"
+
+      # Step 6: Create keystore.properties
+      - name: Create keystore.properties
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          echo "storeFile=../release-keystore.jks" > keystore.properties
+          echo "storePassword=$KEYSTORE_PASSWORD" >> keystore.properties
+          echo "keyAlias=$KEY_ALIAS" >> keystore.properties
+          echo "keyPassword=$KEY_PASSWORD" >> keystore.properties
+          echo "✅ keystore.properties created"
+
+      # Step 7: Update version in build.gradle.kts
+      - name: Update version in build.gradle.kts
+        run: |
+          VERSION_NAME="${{ needs.validate.outputs.version_name }}"
+          VERSION_CODE="${{ needs.validate.outputs.version_code }}"
+
+          sed -i "s/versionCode = .*/versionCode = $VERSION_CODE/" app/build.gradle.kts
+          sed -i "s/versionName = \".*\"/versionName = \"$VERSION_NAME\"/" app/build.gradle.kts
+
+          echo "✅ Updated version to $VERSION_NAME (code: $VERSION_CODE)"
+
+      # Step 8: Build release APK
+      - name: Build release APK
+        run: ./gradlew assembleRelease --stacktrace
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+
+      # Step 9: Build release AAB (for Play Store)
+      - name: Build release AAB
+        run: ./gradlew bundleRelease --stacktrace
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+
+      # Step 10: Verify APK signature
+      - name: Verify APK signature
+        run: |
+          APK_PATH="app/build/outputs/apk/release/app-release.apk"
+
+          if [ -f "$APK_PATH" ]; then
+            # Check APK signature using apksigner (from Android SDK)
+            $ANDROID_HOME/build-tools/*/apksigner verify --verbose "$APK_PATH" || {
+              echo "❌ APK signature verification failed!"
+              exit 1
+            }
+            echo "✅ APK signature verified successfully"
+
+            # Get APK size
+            APK_SIZE=$(du -h "$APK_PATH" | cut -f1)
+            echo "📦 Release APK size: $APK_SIZE"
+          else
+            echo "❌ Release APK not found!"
+            exit 1
+          fi
+
+      # Step 11: Rename APK with version
+      - name: Rename release artifacts
+        run: |
+          VERSION_NAME="${{ needs.validate.outputs.version_name }}"
+
+          cp app/build/outputs/apk/release/app-release.apk \
+             app/build/outputs/apk/release/focusmother-v${VERSION_NAME}.apk
+
+          if [ -f "app/build/outputs/bundle/release/app-release.aab" ]; then
+            cp app/build/outputs/bundle/release/app-release.aab \
+               app/build/outputs/bundle/release/focusmother-v${VERSION_NAME}.aab
+          fi
+
+          echo "✅ Artifacts renamed with version $VERSION_NAME"
+
+      # Step 12: Upload release APK
+      - name: Upload release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-apk-${{ needs.validate.outputs.version_name }}
+          path: app/build/outputs/apk/release/focusmother-v*.apk
+          retention-days: 90
+
+      # Step 13: Upload release AAB
+      - name: Upload release AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-aab-${{ needs.validate.outputs.version_name }}
+          path: app/build/outputs/bundle/release/focusmother-v*.aab
+          retention-days: 90
+
+      # Step 14: Upload ProGuard mapping files
+      - name: Upload ProGuard mappings
+        uses: actions/upload-artifact@v4
+        with:
+          name: proguard-mappings-${{ needs.validate.outputs.version_name }}
+          path: app/build/outputs/mapping/release/mapping.txt
+          retention-days: 365  # Keep for 1 year for crash deobfuscation
+
+      # Step 15: Clean up keystore
+      - name: Clean up keystore
+        if: always()
+        run: |
+          rm -f release-keystore.jks
+          rm -f keystore.properties
+          echo "✅ Keystore files cleaned up"
+
+  # Create GitHub Release
+  release:
+    name: Create GitHub Release
+    needs: [validate, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      # Step 1: Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Step 2: Download release APK
+      - name: Download release APK
+        uses: actions/download-artifact@v4
+        with:
+          name: release-apk-${{ needs.validate.outputs.version_name }}
+          path: ./release-artifacts
+
+      # Step 3: Download release AAB
+      - name: Download release AAB
+        uses: actions/download-artifact@v4
+        with:
+          name: release-aab-${{ needs.validate.outputs.version_name }}
+          path: ./release-artifacts
+
+      # Step 4: Download ProGuard mappings
+      - name: Download ProGuard mappings
+        uses: actions/download-artifact@v4
+        with:
+          name: proguard-mappings-${{ needs.validate.outputs.version_name }}
+          path: ./release-artifacts
+
+      # Step 5: Generate changelog
+      - name: Generate changelog
+        id: changelog
+        run: |
+          VERSION_NAME="${{ needs.validate.outputs.version_name }}"
+
+          # Get the previous tag
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          if [ -z "$PREVIOUS_TAG" ]; then
+            CHANGELOG="Initial release"
+          else
+            # Generate changelog from commits since last tag
+            CHANGELOG=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
+          fi
+
+          # Add manual release notes if provided
+          MANUAL_NOTES="${{ github.event.inputs.release_notes }}"
+          if [ -n "$MANUAL_NOTES" ]; then
+            FULL_CHANGELOG="${MANUAL_NOTES}\n\n## Changes:\n${CHANGELOG}"
+          else
+            FULL_CHANGELOG="## Changes:\n${CHANGELOG}"
+          fi
+
+          # Save to file for GitHub release
+          echo -e "$FULL_CHANGELOG" > changelog.txt
+
+          echo "✅ Changelog generated"
+
+      # Step 6: Create GitHub Release
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ needs.validate.outputs.version_name }}
+          name: FocusMother v${{ needs.validate.outputs.version_name }}
+          body_path: changelog.txt
+          draft: false
+          prerelease: false
+          files: |
+            release-artifacts/focusmother-v*.apk
+            release-artifacts/focusmother-v*.aab
+            release-artifacts/mapping.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Step 7: Release summary
+      - name: Release summary
+        run: |
+          echo "🎉 Release v${{ needs.validate.outputs.version_name }} created successfully!"
+          echo ""
+          echo "📦 Artifacts:"
+          ls -lh release-artifacts/
+          echo ""
+          echo "🔗 Release URL: https://github.com/${{ github.repository }}/releases/tag/v${{ needs.validate.outputs.version_name }}"
+
+  # Optional: Deploy to Google Play
+  deploy-play-store:
+    name: Deploy to Google Play
+    needs: [validate, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Only run if deploy_to_play is true
+    if: github.event.inputs.deploy_to_play == 'true'
+
+    steps:
+      # Step 1: Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step 2: Download release AAB
+      - name: Download release AAB
+        uses: actions/download-artifact@v4
+        with:
+          name: release-aab-${{ needs.validate.outputs.version_name }}
+          path: ./release-artifacts
+
+      # Step 3: Deploy to Google Play Internal Testing
+      - name: Deploy to Google Play Internal Testing
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_STORE_SERVICE_ACCOUNT_JSON }}
+          packageName: com.focusmother.android
+          releaseFiles: release-artifacts/focusmother-v*.aab
+          track: internal
+          status: completed
+          inAppUpdatePriority: 2
+          whatsNewDirectory: ./release-notes
+          mappingFile: release-artifacts/mapping.txt
+
+      # Step 4: Deployment summary
+      - name: Deployment summary
+        run: |
+          echo "✅ Successfully deployed to Google Play Internal Testing"
+          echo "Version: ${{ needs.validate.outputs.version_name }}"
+          echo "Track: internal"
+          echo ""
+          echo "🔗 View in Play Console: https://play.google.com/console/"
+
+  # Post-release health check
+  health-check:
+    name: Post-Release Health Check
+    needs: [validate, build, release]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Health check summary
+        run: |
+          echo "🏥 Post-Release Health Check"
+          echo "============================"
+          echo ""
+          echo "✅ Validation: PASSED"
+          echo "✅ Build: PASSED"
+          echo "✅ Release: PASSED"
+          echo ""
+          echo "📋 Next Steps:"
+          echo "1. Download APK from GitHub Releases"
+          echo "2. Test installation on multiple devices"
+          echo "3. Verify ProGuard obfuscation is working"
+          echo "4. Monitor crash reports in Firebase Crashlytics"
+          echo "5. Check app size and performance metrics"
+          echo ""
+          echo "🎯 Version: v${{ needs.validate.outputs.version_name }}"
+          echo "📦 Build Code: ${{ needs.validate.outputs.version_code }}"
