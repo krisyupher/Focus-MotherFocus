@@ -180,6 +180,174 @@ class UsageMonitor(private val context: Context) {
     fun getScreenTimeForDateRange(startTime: Long, endTime: Long): Long {
         return getScreenTimeBetween(startTime, endTime)
     }
+
+    /**
+     * Analyzes historical usage patterns to establish a baseline.
+     *
+     * Looks at the past N days to calculate average daily screen time.
+     * This is used to automatically set appropriate thresholds instead of
+     * requiring users to manually set daily goals.
+     *
+     * @param days Number of past days to analyze (default: 7)
+     * @return UsageBaseline containing average and peak usage data
+     */
+    suspend fun analyzeUsageBaseline(days: Int = 7): UsageBaseline = withContext(Dispatchers.IO) {
+        if (usageStatsManager == null) {
+            return@withContext UsageBaseline(
+                averageDailyUsageMs = 2 * 60 * 60 * 1000L, // Default 2 hours
+                peakDailyUsageMs = 3 * 60 * 60 * 1000L,    // Default 3 hours
+                daysAnalyzed = 0,
+                topApps = emptyList()
+            )
+        }
+
+        val dailyUsages = mutableListOf<Long>()
+        val appUsageMap = mutableMapOf<String, Long>()
+        val calendar = Calendar.getInstance()
+
+        // Analyze each day
+        for (day in 1..days) {
+            // Set to start of day (days ago)
+            calendar.timeInMillis = System.currentTimeMillis()
+            calendar.add(Calendar.DAY_OF_YEAR, -day)
+            calendar.set(Calendar.HOUR_OF_DAY, 0)
+            calendar.set(Calendar.MINUTE, 0)
+            calendar.set(Calendar.SECOND, 0)
+            calendar.set(Calendar.MILLISECOND, 0)
+            val dayStart = calendar.timeInMillis
+
+            // Set to end of day
+            calendar.set(Calendar.HOUR_OF_DAY, 23)
+            calendar.set(Calendar.MINUTE, 59)
+            calendar.set(Calendar.SECOND, 59)
+            val dayEnd = calendar.timeInMillis
+
+            // Query usage for this day
+            val usageStatsList = usageStatsManager.queryUsageStats(
+                UsageStatsManager.INTERVAL_DAILY,
+                dayStart,
+                dayEnd
+            )
+
+            if (usageStatsList != null && usageStatsList.isNotEmpty()) {
+                val dailyTotal = usageStatsList.sumOf { it.totalTimeInForeground }
+                if (dailyTotal > 0) {
+                    dailyUsages.add(dailyTotal)
+                }
+
+                // Aggregate app usage
+                usageStatsList.forEach { stat ->
+                    if (stat.totalTimeInForeground > 0) {
+                        val current = appUsageMap[stat.packageName] ?: 0L
+                        appUsageMap[stat.packageName] = current + stat.totalTimeInForeground
+                    }
+                }
+            }
+        }
+
+        // Calculate statistics
+        val averageUsage = if (dailyUsages.isNotEmpty()) {
+            dailyUsages.sum() / dailyUsages.size
+        } else {
+            2 * 60 * 60 * 1000L // Default 2 hours
+        }
+
+        val peakUsage = if (dailyUsages.isNotEmpty()) {
+            dailyUsages.maxOrNull() ?: averageUsage
+        } else {
+            3 * 60 * 60 * 1000L // Default 3 hours
+        }
+
+        // Get top apps
+        val topApps = appUsageMap.entries
+            .sortedByDescending { it.value }
+            .take(10)
+            .map { (packageName, totalTime) ->
+                AppUsageInfo(
+                    packageName = packageName,
+                    appName = getAppName(packageName),
+                    lastTimeUsed = 0L,
+                    totalTimeInForeground = totalTime / days.coerceAtLeast(1)
+                )
+            }
+
+        UsageBaseline(
+            averageDailyUsageMs = averageUsage,
+            peakDailyUsageMs = peakUsage,
+            daysAnalyzed = dailyUsages.size,
+            topApps = topApps
+        )
+    }
+
+    /**
+     * Gets a suggested threshold based on the user's actual usage patterns.
+     *
+     * Returns a threshold that is slightly lower than average usage to encourage
+     * gradual reduction without being unrealistic.
+     *
+     * @param days Number of days to analyze
+     * @return Suggested daily limit in milliseconds
+     */
+    suspend fun getSuggestedDailyLimit(days: Int = 7): Long {
+        val baseline = analyzeUsageBaseline(days)
+
+        // Suggest 80% of average usage as a starting point
+        // This encourages reduction while being achievable
+        val suggested = (baseline.averageDailyUsageMs * 0.8).toLong()
+
+        // Clamp between 1 hour and 8 hours
+        val minLimit = 1 * 60 * 60 * 1000L
+        val maxLimit = 8 * 60 * 60 * 1000L
+
+        return suggested.coerceIn(minLimit, maxLimit)
+    }
+}
+
+/**
+ * Data class representing analyzed usage baseline.
+ *
+ * Contains statistics derived from historical usage data to help
+ * the app automatically set appropriate thresholds.
+ */
+data class UsageBaseline(
+    /** Average daily screen time in milliseconds */
+    val averageDailyUsageMs: Long,
+    /** Peak (highest) daily screen time in milliseconds */
+    val peakDailyUsageMs: Long,
+    /** Number of days with valid data that were analyzed */
+    val daysAnalyzed: Int,
+    /** Top apps by average daily usage */
+    val topApps: List<AppUsageInfo>
+) {
+    /**
+     * Returns formatted average daily usage.
+     */
+    fun getFormattedAverageUsage(): String {
+        val minutes = averageDailyUsageMs / 1000 / 60
+        val hours = minutes / 60
+        val remainingMinutes = minutes % 60
+
+        return when {
+            hours > 0 -> "${hours}h ${remainingMinutes}m"
+            minutes > 0 -> "${minutes}m"
+            else -> "<1m"
+        }
+    }
+
+    /**
+     * Returns formatted peak daily usage.
+     */
+    fun getFormattedPeakUsage(): String {
+        val minutes = peakDailyUsageMs / 1000 / 60
+        val hours = minutes / 60
+        val remainingMinutes = minutes % 60
+
+        return when {
+            hours > 0 -> "${hours}h ${remainingMinutes}m"
+            minutes > 0 -> "${minutes}m"
+            else -> "<1m"
+        }
+    }
 }
 
 /**

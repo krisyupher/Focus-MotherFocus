@@ -1,13 +1,7 @@
 package com.focusmother.android.data.repository
 
-import android.content.Context
 import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.booleanPreferencesKey
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.intPreferencesKey
-import androidx.datastore.preferences.core.longPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
+import androidx.datastore.preferences.core.*
 import com.focusmother.android.data.preferences.SettingsPreferences
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -18,16 +12,14 @@ import kotlinx.coroutines.flow.map
  * Provides a reactive Flow-based API for reading and updating settings.
  * All operations are suspend functions and safe for background execution.
  *
- * @param context Application context for accessing DataStore
+ * @param dataStore The DataStore instance to manage settings
  */
-class SettingsRepository(private val context: Context) {
-
-    private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = SETTINGS_NAME)
+class SettingsRepository(private val dataStore: DataStore<Preferences>) {
 
     /**
      * Flow of current settings that emits updates whenever settings change.
      */
-    val settingsFlow: Flow<SettingsPreferences> = context.dataStore.data
+    val settingsFlow: Flow<SettingsPreferences> = dataStore.data
         .map { preferences ->
             SettingsPreferences(
                 dailyGoalMs = preferences[KEY_DAILY_GOAL_MS] ?: SettingsPreferences().dailyGoalMs,
@@ -52,7 +44,7 @@ class SettingsRepository(private val context: Context) {
             "Daily goal must be at most ${SettingsPreferences.MAX_DAILY_GOAL_HOURS} hours"
         }
 
-        context.dataStore.edit { preferences ->
+        dataStore.edit { preferences ->
             preferences[KEY_DAILY_GOAL_MS] = goalMs
         }
     }
@@ -73,7 +65,7 @@ class SettingsRepository(private val context: Context) {
             "End time must be between 0 and 1439 minutes"
         }
 
-        context.dataStore.edit { preferences ->
+        dataStore.edit { preferences ->
             preferences[KEY_QUIET_HOURS_ENABLED] = enabled
             preferences[KEY_QUIET_HOURS_START] = startMinutes
             preferences[KEY_QUIET_HOURS_END] = endMinutes
@@ -86,7 +78,7 @@ class SettingsRepository(private val context: Context) {
      * @param enabled Whether strict mode is enabled
      */
     suspend fun updateStrictMode(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
+        dataStore.edit { preferences ->
             preferences[KEY_STRICT_MODE] = enabled
         }
     }
@@ -95,8 +87,28 @@ class SettingsRepository(private val context: Context) {
      * Resets all settings to defaults.
      */
     suspend fun resetToDefaults() {
-        context.dataStore.edit { preferences ->
+        dataStore.edit { preferences ->
             preferences.clear()
+        }
+    }
+
+    /**
+     * Sets the daily goal based on automatic usage analysis.
+     *
+     * This is called during app initialization when no manual goal has been set.
+     * The goal is automatically derived from the user's historical usage patterns.
+     *
+     * @param suggestedLimitMs Suggested limit in milliseconds (from UsageMonitor.getSuggestedDailyLimit)
+     */
+    suspend fun setAutoDailyGoal(suggestedLimitMs: Long) {
+        // Clamp to valid range
+        val clampedLimit = suggestedLimitMs.coerceIn(
+            SettingsPreferences.hoursToMs(SettingsPreferences.MIN_DAILY_GOAL_HOURS),
+            SettingsPreferences.hoursToMs(SettingsPreferences.MAX_DAILY_GOAL_HOURS)
+        )
+
+        dataStore.edit { preferences ->
+            preferences[KEY_DAILY_GOAL_MS] = clampedLimit
         }
     }
 
@@ -123,8 +135,6 @@ class SettingsRepository(private val context: Context) {
     }
 
     companion object {
-        private const val SETTINGS_NAME = "focus_mother_settings"
-
         private val KEY_DAILY_GOAL_MS = longPreferencesKey("daily_goal_ms")
         private val KEY_QUIET_HOURS_ENABLED = booleanPreferencesKey("quiet_hours_enabled")
         private val KEY_QUIET_HOURS_START = intPreferencesKey("quiet_hours_start")

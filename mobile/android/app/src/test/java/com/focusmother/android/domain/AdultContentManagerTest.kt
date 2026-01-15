@@ -127,31 +127,85 @@ class AdultContentManagerTest {
     }
 
     @Test
-    fun `getConversationPrompt returns non-judgmental message`() {
+    fun `getConversationPrompt returns message from valid list`() {
         // Act
         val prompt = adultContentManager.getConversationPrompt()
 
-        // Assert
-        assertFalse(prompt.contains("porn", ignoreCase = true))
-        assertFalse(prompt.contains("shame", ignoreCase = true))
-        assertFalse(prompt.contains("wrong", ignoreCase = true))
-        assertFalse(prompt.contains("bad", ignoreCase = true))
-        assertTrue(prompt.contains("app", ignoreCase = true))
-        assertTrue(prompt.length > 50) // Should be substantial
+        // Assert - should be one of the predefined prompts
+        assertTrue(AdultContentManager.CONVERSATION_PROMPTS.contains(prompt))
     }
 
     @Test
-    fun `getConversationPrompt promotes healthier alternatives`() {
-        // Act
-        val prompt = adultContentManager.getConversationPrompt()
+    fun `getConversationPrompt returns non-judgmental message`() {
+        // Act - test all prompts
+        AdultContentManager.CONVERSATION_PROMPTS.forEach { prompt ->
+            // Assert - no shaming language
+            assertFalse(prompt.contains("porn", ignoreCase = true))
+            assertFalse(prompt.contains("shame", ignoreCase = true))
+            assertFalse(prompt.contains("wrong", ignoreCase = true))
+            assertFalse(prompt.contains("bad", ignoreCase = true))
+            assertTrue(prompt.length > 50) // Should be substantial
+        }
+    }
 
-        // Assert
-        assertTrue(
-            prompt.contains("alternative", ignoreCase = true) ||
-            prompt.contains("instead", ignoreCase = true) ||
-            prompt.contains("connection", ignoreCase = true) ||
-            prompt.contains("relationship", ignoreCase = true)
-        )
+    @Test
+    fun `getConversationPrompt promotes positive themes`() {
+        // Act - test all prompts contain motivational themes
+        AdultContentManager.CONVERSATION_PROMPTS.forEach { prompt ->
+            // Assert - should contain at least one positive theme
+            val hasPositiveTheme = prompt.contains("mission", ignoreCase = true) ||
+                prompt.contains("energy", ignoreCase = true) ||
+                prompt.contains("focus", ignoreCase = true) ||
+                prompt.contains("power", ignoreCase = true) ||
+                prompt.contains("strength", ignoreCase = true) ||
+                prompt.contains("vital", ignoreCase = true) ||
+                prompt.contains("Ranger", ignoreCase = true) ||
+                prompt.contains("dream", ignoreCase = true) ||
+                prompt.contains("potential", ignoreCase = true)
+            assertTrue("Prompt should contain positive theme: $prompt", hasPositiveTheme)
+        }
+    }
+
+    @Test
+    fun `getInterventionMessage returns message from valid list`() {
+        // Act
+        val message = adultContentManager.getInterventionMessage()
+
+        // Assert - should be one of the predefined messages
+        assertTrue(AdultContentManager.INTERVENTION_MESSAGES.contains(message))
+    }
+
+    @Test
+    fun `getInterventionMessage returns short messages`() {
+        // Act - test all intervention messages
+        AdultContentManager.INTERVENTION_MESSAGES.forEach { message ->
+            // Assert - should be short for notification display
+            assertTrue("Message too long: $message", message.length < 50)
+        }
+    }
+
+    @Test
+    fun `INTERVENTION_MESSAGES has variety of messages`() {
+        // Assert - should have at least 10 different messages for variety
+        assertTrue(AdultContentManager.INTERVENTION_MESSAGES.size >= 10)
+    }
+
+    @Test
+    fun `CONVERSATION_PROMPTS has variety of prompts`() {
+        // Assert - should have at least 10 different prompts for variety
+        assertTrue(AdultContentManager.CONVERSATION_PROMPTS.size >= 10)
+    }
+
+    @Test
+    fun `SUGGESTED_LIMIT_MS is 1 minute for strict adult content blocking`() {
+        // Assert - 1 minute limit (60,000 ms)
+        assertEquals(60_000L, AdultContentManager.SUGGESTED_LIMIT_MS)
+    }
+
+    @Test
+    fun `GRACE_PERIOD_MS is 10 seconds`() {
+        // Assert - 10 second grace period
+        assertEquals(10_000L, AdultContentManager.GRACE_PERIOD_MS)
     }
 
     @Test

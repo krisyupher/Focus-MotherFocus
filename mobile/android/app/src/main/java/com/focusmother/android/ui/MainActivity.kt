@@ -40,8 +40,8 @@ import com.focusmother.android.ui.avatar.AvatarSetupActivity
 import com.focusmother.android.ui.avatar.Avatar3DView
 import com.focusmother.android.ui.onboarding.OnboardingActivity
 import com.focusmother.android.ui.theme.FocusMotherFocusTheme
+import com.focusmother.android.dataStore
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -78,7 +78,7 @@ class MainActivity : ComponentActivity() {
         seedDatabaseIfNeeded()
 
         usageMonitor = UsageMonitor(this)
-        settingsRepository = SettingsRepository(this)
+        settingsRepository = SettingsRepository(dataStore)
         loadMonitoringState()
         loadAvatarStatus()
 
@@ -651,7 +651,7 @@ class MainActivity : ComponentActivity() {
                 }
 
                 LinearProgressIndicator(
-                    progress = progress,
+                    progress = { progress },
                     modifier = Modifier.fillMaxWidth(),
                     color = progressColor,
                     trackColor = Color(0xFF3A3A3A)

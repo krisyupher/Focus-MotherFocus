@@ -1,22 +1,21 @@
 package com.focusmother.android.ui.onboarding
 
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
-import com.focusmother.android.data.preferences.SettingsPreferences
 import com.focusmother.android.data.repository.SettingsRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
 
 /**
  * ViewModel for the onboarding flow.
  *
  * Manages onboarding wizard state including:
- * - Current step navigation (1-5)
+ * - Current step navigation (1-4)
  * - Permission states
- * - Daily goal selection
  * - Avatar creation decision
+ *
+ * Note: Daily goal is no longer set manually. The app automatically analyzes
+ * device usage patterns to establish appropriate thresholds.
  */
 class OnboardingViewModel(
     private val settingsRepository: SettingsRepository
@@ -58,24 +57,6 @@ class OnboardingViewModel(
     }
 
     /**
-     * Sets the daily screen time goal.
-     *
-     * @param hours Goal in hours (1-8)
-     */
-    fun setDailyGoal(hours: Int) {
-        require(hours in SettingsPreferences.MIN_DAILY_GOAL_HOURS..SettingsPreferences.MAX_DAILY_GOAL_HOURS) {
-            "Daily goal must be between ${SettingsPreferences.MIN_DAILY_GOAL_HOURS} and ${SettingsPreferences.MAX_DAILY_GOAL_HOURS} hours"
-        }
-
-        _uiState.value = _uiState.value.copy(selectedDailyGoalHours = hours)
-
-        // Persist to repository
-        viewModelScope.launch {
-            settingsRepository.updateDailyGoal(SettingsPreferences.hoursToMs(hours))
-        }
-    }
-
-    /**
      * Marks that user chose to skip avatar creation.
      */
     fun skipAvatarCreation() {
@@ -114,9 +95,8 @@ class OnboardingViewModel(
         const val STEP_WELCOME = 1
         const val STEP_PERMISSIONS = 2
         const val STEP_AVATAR = 3
-        const val STEP_DAILY_GOAL = 4
-        const val STEP_COMPLETE = 5
-        const val TOTAL_STEPS = 5
+        const val STEP_COMPLETE = 4
+        const val TOTAL_STEPS = 4
     }
 }
 
@@ -130,7 +110,6 @@ data class OnboardingUiState(
         PermissionType.NOTIFICATIONS to false,
         PermissionType.CAMERA to false
     ),
-    val selectedDailyGoalHours: Int = 2,
     val skipAvatar: Boolean = false
 )
 

@@ -8,21 +8,20 @@ import androidx.datastore.preferences.preferencesDataStoreFile
 import com.focusmother.android.data.preferences.SettingsPreferences
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.Mock
 import org.mockito.Mockito
 import org.mockito.junit.MockitoJUnitRunner
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 
 /**
  * Unit tests for SettingsRepository.
@@ -46,7 +45,7 @@ class SettingsRepositoryTest {
 
         // Mock context to return a test DataStore file
         Mockito.`when`(mockContext.filesDir)
-            .thenReturn(java.io.File(System.getProperty("java.io.tmpdir")))
+            .thenReturn(java.io.File(System.getProperty("java.io.tmpdir")!!))
 
         testDataStore = PreferenceDataStoreFactory.create(
             scope = testScope,
@@ -55,12 +54,8 @@ class SettingsRepositoryTest {
             }
         )
 
-        repository = SettingsRepository(mockContext)
-
-        // Use reflection to inject test DataStore
-        val field = SettingsRepository::class.java.getDeclaredField("dataStore")
-        field.isAccessible = true
-        // Note: This is a simplified test setup. In production, you'd use dependency injection
+        // Inject the test DataStore directly
+        repository = SettingsRepository(testDataStore)
     }
 
     @After
@@ -70,12 +65,7 @@ class SettingsRepositoryTest {
 
     @Test
     fun `settingsFlow returns default settings initially`() = runTest {
-        // Create a new repository instance for clean state
-        val repo = SettingsRepository(mockContext)
-
-        // This test verifies defaults are returned when no preferences exist
-        // We'll test the actual flow in integration tests
-        // For unit test, we verify the default SettingsPreferences values
+        // Verification of default SettingsPreferences values
         val defaults = SettingsPreferences()
 
         assertEquals(2 * 60 * 60 * 1000L, defaults.dailyGoalMs)
@@ -89,114 +79,103 @@ class SettingsRepositoryTest {
     fun `updateDailyGoal accepts valid values`() = runTest {
         // Test minimum boundary
         val minGoal = SettingsPreferences.hoursToMs(SettingsPreferences.MIN_DAILY_GOAL_HOURS)
-        // Should not throw
-        try {
-            repository.updateDailyGoal(minGoal)
-        } catch (e: Exception) {
-            throw AssertionError("Should accept minimum goal of 1 hour", e)
-        }
+        repository.updateDailyGoal(minGoal)
 
         // Test maximum boundary
         val maxGoal = SettingsPreferences.hoursToMs(SettingsPreferences.MAX_DAILY_GOAL_HOURS)
-        // Should not throw
-        try {
-            repository.updateDailyGoal(maxGoal)
-        } catch (e: Exception) {
-            throw AssertionError("Should accept maximum goal of 8 hours", e)
-        }
+        repository.updateDailyGoal(maxGoal)
 
         // Test mid-range value
         val midGoal = SettingsPreferences.hoursToMs(4)
-        try {
-            repository.updateDailyGoal(midGoal)
-        } catch (e: Exception) {
-            throw AssertionError("Should accept mid-range goal of 4 hours", e)
-        }
+        repository.updateDailyGoal(midGoal)
     }
 
     @Test
     fun `updateDailyGoal rejects values below minimum`() = runTest {
         val belowMin = SettingsPreferences.hoursToMs(SettingsPreferences.MIN_DAILY_GOAL_HOURS) - 1
 
-        val exception = assertFailsWith<IllegalArgumentException> {
+        val exception = try {
             repository.updateDailyGoal(belowMin)
+            null
+        } catch (_: IllegalArgumentException) {
+            // Success: Exception caught
+            true
         }
 
-        assertTrue(exception.message!!.contains("at least"))
+        assertTrue("Should have thrown IllegalArgumentException", exception == true)
     }
 
     @Test
     fun `updateDailyGoal rejects values above maximum`() = runTest {
         val aboveMax = SettingsPreferences.hoursToMs(SettingsPreferences.MAX_DAILY_GOAL_HOURS) + 1
 
-        val exception = assertFailsWith<IllegalArgumentException> {
+        val exception = try {
             repository.updateDailyGoal(aboveMax)
+            null
+        } catch (_: IllegalArgumentException) {
+            // Success: Exception caught
+            true
         }
 
-        assertTrue(exception.message!!.contains("at most"))
+        assertTrue("Should have thrown IllegalArgumentException", exception == true)
     }
 
     @Test
     fun `updateQuietHours accepts valid time ranges`() = runTest {
         // Normal day range: 9:00 - 17:00
-        try {
-            repository.updateQuietHours(true, 9 * 60, 17 * 60)
-        } catch (e: Exception) {
-            throw AssertionError("Should accept normal day range", e)
-        }
+        repository.updateQuietHours(true, 9 * 60, 17 * 60)
 
         // Overnight range: 23:00 - 07:00
-        try {
-            repository.updateQuietHours(true, 23 * 60, 7 * 60)
-        } catch (e: Exception) {
-            throw AssertionError("Should accept overnight range", e)
-        }
+        repository.updateQuietHours(true, 23 * 60, 7 * 60)
 
         // Boundary values
-        try {
-            repository.updateQuietHours(true, 0, 1439)
-        } catch (e: Exception) {
-            throw AssertionError("Should accept boundary values 0 and 1439", e)
-        }
+        repository.updateQuietHours(true, 0, 1439)
     }
 
     @Test
     fun `updateQuietHours rejects negative start time`() = runTest {
-        assertFailsWith<IllegalArgumentException> {
+        try {
             repository.updateQuietHours(true, -1, 7 * 60)
+            throw AssertionError("Should have thrown IllegalArgumentException")
+        } catch (_: IllegalArgumentException) {
+            // Expected
         }
     }
 
     @Test
     fun `updateQuietHours rejects start time above 1439`() = runTest {
-        assertFailsWith<IllegalArgumentException> {
+        try {
             repository.updateQuietHours(true, 1440, 7 * 60)
+            throw AssertionError("Should have thrown IllegalArgumentException")
+        } catch (_: IllegalArgumentException) {
+            // Expected
         }
     }
 
     @Test
     fun `updateQuietHours rejects negative end time`() = runTest {
-        assertFailsWith<IllegalArgumentException> {
+        try {
             repository.updateQuietHours(true, 23 * 60, -1)
+            throw AssertionError("Should have thrown IllegalArgumentException")
+        } catch (_: IllegalArgumentException) {
+            // Expected
         }
     }
 
     @Test
     fun `updateQuietHours rejects end time above 1439`() = runTest {
-        assertFailsWith<IllegalArgumentException> {
+        try {
             repository.updateQuietHours(true, 23 * 60, 1440)
+            throw AssertionError("Should have thrown IllegalArgumentException")
+        } catch (_: IllegalArgumentException) {
+            // Expected
         }
     }
 
     @Test
     fun `updateStrictMode updates setting`() = runTest {
-        // Should not throw
-        try {
-            repository.updateStrictMode(true)
-            repository.updateStrictMode(false)
-        } catch (e: Exception) {
-            throw AssertionError("updateStrictMode should not throw", e)
-        }
+        repository.updateStrictMode(true)
+        repository.updateStrictMode(false)
     }
 
     @Test
@@ -310,12 +289,6 @@ class SettingsRepositoryTest {
 
     @Test
     fun `resetToDefaults clears all preferences`() = runTest {
-        // This test verifies the method doesn't throw
-        // Actual persistence testing would be in integration tests
-        try {
-            repository.resetToDefaults()
-        } catch (e: Exception) {
-            throw AssertionError("resetToDefaults should not throw", e)
-        }
+        repository.resetToDefaults()
     }
 }

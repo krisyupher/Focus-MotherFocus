@@ -19,6 +19,7 @@ import com.focusmother.android.domain.ViolationResult
 import com.focusmother.android.monitor.UsageMonitor
 import com.focusmother.android.ui.MainActivity
 import com.focusmother.android.ui.conversation.ConversationActivity
+import com.focusmother.android.dataStore
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
 import java.util.Calendar
@@ -46,7 +47,7 @@ class MonitoringService : Service() {
     override fun onCreate() {
         super.onCreate()
         usageMonitor = UsageMonitor(this)
-        settingsRepository = SettingsRepository(this)
+        settingsRepository = SettingsRepository(dataStore)
 
         // Initialize agreement components
         val database = FocusMotherDatabase.getDatabase(this)
@@ -150,17 +151,20 @@ class MonitoringService : Service() {
                         val packageName = currentApp.packageName
                         val dailyUsage = currentApp.totalTimeInForeground
 
-                        // PRIORITY: Check if app is adult content (strictest threshold)
+                        // PRIORITY 1: Check if app is adult content (strictest - close immediately)
                         val isAdultContent = adultContentManager.isAdultContent(packageName)
 
-                        // Get threshold from CategoryManager (uses category defaults + custom thresholds)
-                        val usageThreshold = if (isAdultContent) {
-                            // Adult content gets strict 5-minute threshold
-                            AdultContentManager.SUGGESTED_LIMIT_MS
-                        } else {
-                            // Use category-based threshold from CategoryManager
-                            categoryManager.getThreshold(packageName)
+                        if (isAdultContent && dailyUsage > AdultContentManager.SUGGESTED_LIMIT_MS) {
+                            // ADULT CONTENT DETECTED - Close app immediately and launch Zordon
+                            closeAppAndLaunchZordon(
+                                packageName = packageName,
+                                message = adultContentManager.getInterventionMessage()
+                            )
+                            return // Exit immediately after intervention
                         }
+
+                        // PRIORITY 2: Get threshold from CategoryManager (uses category defaults + custom thresholds)
+                        val usageThreshold = categoryManager.getThreshold(packageName)
 
                         // Check if blocked
                         val isBlocked = categoryManager.isBlocked(packageName)
@@ -174,14 +178,9 @@ class MonitoringService : Service() {
                         } else if (dailyUsage > usageThreshold && shouldTriggerIntervention()) {
                             // App exceeded its category threshold
                             val formattedTime = formatDuration(dailyUsage)
-                            val formattedThreshold = formatDuration(usageThreshold)
+                            val formattedThreshold = formatThreshold(usageThreshold)
 
-                            val reason = if (isAdultContent) {
-                                // Use non-judgmental adult content messaging
-                                "You've been on this app for $formattedTime. That's longer than your $formattedThreshold limit. Let's talk about healthier alternatives."
-                            } else {
-                                "You've spent $formattedTime on ${currentApp.appName} today. That exceeds your $formattedThreshold threshold."
-                            }
+                            val reason = "You've spent $formattedTime on ${currentApp.appName} today. That exceeds your $formattedThreshold threshold."
 
                             launchConversation(
                                 currentApp = packageName,
@@ -245,6 +244,44 @@ class MonitoringService : Service() {
         startActivity(intent)
     }
 
+    /**
+     * ADULT CONTENT INTERVENTION - Immediately closes the current app and launches Zordon
+     * with the "don't waste your vital source" message.
+     *
+     * This is more aggressive than regular intervention - it forcefully takes the user
+     * away from the adult content by:
+     * 1. Sending user to home screen (closes the offending app)
+     * 2. Immediately launching Zordon conversation
+     *
+     * @param packageName Package name of the adult content app being closed
+     * @param message The intervention message (e.g., "Don't waste your vital source.")
+     */
+    private fun closeAppAndLaunchZordon(packageName: String, message: String) {
+        lastInterventionTime = System.currentTimeMillis()
+
+        // Step 1: Send user to home screen to close the adult content app
+        val homeIntent = Intent(Intent.ACTION_MAIN).apply {
+            addCategory(Intent.CATEGORY_HOME)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        startActivity(homeIntent)
+
+        // Step 2: Launch Zordon conversation immediately after a brief delay
+        // Using a coroutine to ensure home screen is shown first
+        serviceScope.launch {
+            delay(300) // Brief delay to ensure home screen shows first
+
+            val conversationIntent = Intent(this@MonitoringService, ConversationActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra(ConversationActivity.EXTRA_CURRENT_APP, packageName)
+                putExtra(ConversationActivity.EXTRA_INTERVENTION_REASON, message)
+                putExtra(ConversationActivity.EXTRA_CONVERSATION_ID, 1L)
+                putExtra(EXTRA_ADULT_CONTENT_BLOCK, true) // Flag for special handling
+            }
+            startActivity(conversationIntent)
+        }
+    }
+
     private fun formatDuration(ms: Long): String {
         val minutes = ms / 1000 / 60
         val hours = minutes / 60
@@ -253,6 +290,11 @@ class MonitoringService : Service() {
             hours > 0 -> "${hours}h ${remainingMinutes}m"
             else -> "${minutes}m"
         }
+    }
+
+    private fun formatThreshold(ms: Long): String {
+        if (ms == Long.MAX_VALUE) return "unlimited"
+        return formatDuration(ms)
     }
 
     private fun createForegroundNotification(): Notification {
@@ -330,6 +372,7 @@ class MonitoringService : Service() {
         const val ACTION_SNOOZE = "com.focusmother.android.SNOOZE"
         const val ACTION_TAKE_BREAK = "com.focusmother.android.TAKE_BREAK"
         const val ACTION_REQUEST_TIME = "com.focusmother.android.REQUEST_TIME"
+        const val EXTRA_ADULT_CONTENT_BLOCK = "com.focusmother.android.ADULT_CONTENT_BLOCK"
         private const val NOTIFICATION_ID = 1001
         private const val INTERVENTION_NOTIFICATION_ID = 1002
         private const val COMPLETION_NOTIFICATION_ID = 1003

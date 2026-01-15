@@ -5,8 +5,10 @@ import com.focusmother.android.data.preferences.SettingsPreferences
 import com.focusmother.android.data.repository.SettingsRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -14,17 +16,12 @@ import org.junit.runner.RunWith
 import org.mockito.Mock
 import org.mockito.Mockito
 import org.mockito.junit.MockitoJUnitRunner
-import org.mockito.kotlin.any
-import org.mockito.kotlin.verify
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 
 /**
  * Unit tests for OnboardingViewModel.
  *
- * Tests step navigation, permission tracking, goal setting, and validation logic.
+ * Tests step navigation, permission tracking, and validation logic.
+ * Note: Daily goal tests removed - app now automatically analyzes device usage.
  */
 @ExperimentalCoroutinesApi
 @RunWith(MockitoJUnitRunner::class)
@@ -55,7 +52,6 @@ class OnboardingViewModelTest {
         assertEquals(false, state.grantedPermissions[PermissionType.USAGE_STATS])
         assertEquals(false, state.grantedPermissions[PermissionType.NOTIFICATIONS])
         assertEquals(false, state.grantedPermissions[PermissionType.CAMERA])
-        assertEquals(2, state.selectedDailyGoalHours)
         assertFalse(state.skipAvatar)
     }
 
@@ -72,13 +68,9 @@ class OnboardingViewModelTest {
         viewModel.nextStep()
         assertEquals(3, viewModel.uiState.value.currentStep)
 
-        // Advance to step 4
+        // Advance to step 4 (final step)
         viewModel.nextStep()
         assertEquals(4, viewModel.uiState.value.currentStep)
-
-        // Advance to step 5 (final step)
-        viewModel.nextStep()
-        assertEquals(5, viewModel.uiState.value.currentStep)
     }
 
     @Test
@@ -88,13 +80,13 @@ class OnboardingViewModelTest {
             viewModel.nextStep()
         }
 
-        assertEquals(5, viewModel.uiState.value.currentStep)
+        assertEquals(4, viewModel.uiState.value.currentStep)
 
         // Try to advance past final step
         viewModel.nextStep()
 
-        // Should still be at step 5
-        assertEquals(5, viewModel.uiState.value.currentStep)
+        // Should still be at step 4
+        assertEquals(4, viewModel.uiState.value.currentStep)
     }
 
     @Test
@@ -151,48 +143,6 @@ class OnboardingViewModelTest {
         // Revoke permission
         viewModel.updatePermission(PermissionType.CAMERA, false)
         assertFalse(viewModel.uiState.value.grantedPermissions[PermissionType.CAMERA]!!)
-    }
-
-    @Test
-    fun `setDailyGoal updates state and persists to repository`() = runTest(UnconfinedTestDispatcher()) {
-        // Set goal to 4 hours
-        viewModel.setDailyGoal(4)
-
-        // Check state updated
-        assertEquals(4, viewModel.uiState.value.selectedDailyGoalHours)
-
-        // Verify repository called with correct value
-        verify(mockSettingsRepository).updateDailyGoal(4 * 60 * 60 * 1000L)
-    }
-
-    @Test
-    fun `setDailyGoal accepts minimum value of 1 hour`() = runTest(UnconfinedTestDispatcher()) {
-        viewModel.setDailyGoal(1)
-
-        assertEquals(1, viewModel.uiState.value.selectedDailyGoalHours)
-        verify(mockSettingsRepository).updateDailyGoal(1 * 60 * 60 * 1000L)
-    }
-
-    @Test
-    fun `setDailyGoal accepts maximum value of 8 hours`() = runTest(UnconfinedTestDispatcher()) {
-        viewModel.setDailyGoal(8)
-
-        assertEquals(8, viewModel.uiState.value.selectedDailyGoalHours)
-        verify(mockSettingsRepository).updateDailyGoal(8 * 60 * 60 * 1000L)
-    }
-
-    @Test
-    fun `setDailyGoal rejects values below minimum`() {
-        assertFailsWith<IllegalArgumentException> {
-            viewModel.setDailyGoal(0)
-        }
-    }
-
-    @Test
-    fun `setDailyGoal rejects values above maximum`() {
-        assertFailsWith<IllegalArgumentException> {
-            viewModel.setDailyGoal(9)
-        }
     }
 
     @Test
@@ -287,18 +237,9 @@ class OnboardingViewModelTest {
     }
 
     @Test
-    fun `canProceed returns true for daily goal step`() {
-        // Navigate to daily goal step
-        repeat(3) { viewModel.nextStep() }
-        assertEquals(OnboardingViewModel.STEP_DAILY_GOAL, viewModel.uiState.value.currentStep)
-
-        assertTrue(viewModel.canProceed())
-    }
-
-    @Test
     fun `canProceed returns true for complete step`() {
         // Navigate to complete step
-        repeat(4) { viewModel.nextStep() }
+        repeat(3) { viewModel.nextStep() }
         assertEquals(OnboardingViewModel.STEP_COMPLETE, viewModel.uiState.value.currentStep)
 
         assertTrue(viewModel.canProceed())
@@ -309,8 +250,7 @@ class OnboardingViewModelTest {
         assertEquals(1, OnboardingViewModel.STEP_WELCOME)
         assertEquals(2, OnboardingViewModel.STEP_PERMISSIONS)
         assertEquals(3, OnboardingViewModel.STEP_AVATAR)
-        assertEquals(4, OnboardingViewModel.STEP_DAILY_GOAL)
-        assertEquals(5, OnboardingViewModel.STEP_COMPLETE)
-        assertEquals(5, OnboardingViewModel.TOTAL_STEPS)
+        assertEquals(4, OnboardingViewModel.STEP_COMPLETE)
+        assertEquals(4, OnboardingViewModel.TOTAL_STEPS)
     }
 }

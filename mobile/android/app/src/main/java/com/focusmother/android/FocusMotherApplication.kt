@@ -5,12 +5,20 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.preferencesDataStore
 import com.focusmother.android.data.database.FocusMotherDatabase
+import com.focusmother.android.data.repository.SettingsRepository
 import com.focusmother.android.domain.CategoryManager
+import com.focusmother.android.monitor.UsageMonitor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+
+// Property delegate for DataStore (singleton)
+val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "focus_mother_settings")
 
 /**
  * FocusMotherFocus Application Class
@@ -47,6 +55,9 @@ class FocusMotherApplication : Application() {
 
         // Seed database on first launch
         seedDatabaseIfNeeded()
+
+        // Auto-set daily goal based on usage analysis
+        initializeUsageBasedGoal()
     }
 
     /**
@@ -61,6 +72,42 @@ class FocusMotherApplication : Application() {
             if (!prefs.getBoolean(KEY_DATABASE_SEEDED, false)) {
                 categoryManager.seedDatabase()
                 prefs.edit().putBoolean(KEY_DATABASE_SEEDED, true).apply()
+            }
+        }
+    }
+
+    /**
+     * Automatically sets the daily goal based on the user's actual usage patterns.
+     *
+     * This analyzes the past 7 days of usage data and sets a goal that is
+     * 80% of the average daily usage (encouraging gradual reduction).
+     * Only runs once after onboarding is complete.
+     */
+    private fun initializeUsageBasedGoal() {
+        applicationScope.launch {
+            val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+            // Only set auto-goal once, after onboarding and if not already set
+            val onboardingComplete = prefs.getBoolean(KEY_ONBOARDING_COMPLETED, false)
+            val autoGoalSet = prefs.getBoolean(KEY_AUTO_GOAL_SET, false)
+
+            if (onboardingComplete && !autoGoalSet) {
+                val usageMonitor = UsageMonitor(this@FocusMotherApplication)
+
+                // Check if we have usage stats permission
+                if (usageMonitor.hasUsageStatsPermission()) {
+                    val suggestedLimit = usageMonitor.getSuggestedDailyLimit(days = 7)
+                    val settingsRepository = SettingsRepository(dataStore)
+                    settingsRepository.setAutoDailyGoal(suggestedLimit)
+
+                    // Mark as set so we don't overwrite user changes later
+                    prefs.edit().putBoolean(KEY_AUTO_GOAL_SET, true).apply()
+
+                    android.util.Log.i(
+                        "FocusMotherApp",
+                        "Auto-set daily goal based on usage analysis: ${suggestedLimit / 1000 / 60} minutes"
+                    )
+                }
             }
         }
     }
@@ -113,5 +160,7 @@ class FocusMotherApplication : Application() {
 
         private const val PREFS_NAME = "focus_mother_prefs"
         private const val KEY_DATABASE_SEEDED = "database_seeded"
+        private const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
+        private const val KEY_AUTO_GOAL_SET = "auto_goal_set"
     }
 }

@@ -4,167 +4,142 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-FocusMother is a native Android app built with Kotlin that monitors phone usage and helps users stay focused by detecting excessive screen time. It uses a foreground service to continuously monitor usage patterns and trigger interventions when users spend too much time on their phones or distraction apps.
+FocusMother is a native Android app built with Kotlin that monitors phone usage and helps users stay focused through AI-powered conversations. A 3D AI avatar named "Zordon" negotiates time agreements with users when excessive usage is detected. The app uses Claude API for conversations and Ready Player Me for avatar generation.
 
 ## Build & Development Commands
 
-### Build Commands
 ```bash
-# Debug build
-./gradlew assembleDebug
-# Output: app/build/outputs/apk/debug/app-debug.apk
+# Build
+./gradlew assembleDebug                    # Debug APK → app/build/outputs/apk/debug/
+./gradlew assembleRelease                  # Release APK (requires keystore)
+./gradlew installDebug                     # Install on device
 
-# Release build
-./gradlew assembleRelease
-# Output: app/build/outputs/apk/release/app-release.apk
+# Testing
+./gradlew test                             # Unit tests
+./gradlew connectedAndroidTest             # Instrumented tests (requires device/emulator)
+./gradlew test --tests "*.ClassName"       # Single test class
+./gradlew test --tests "*SmokeTest"        # Run smoke tests
 
-# Install on connected device
-./gradlew installDebug
-
-# Clean build
-./gradlew clean
-```
-
-### Testing
-```bash
-# Run unit tests
-./gradlew test
-
-# Run instrumented tests (requires device/emulator)
-./gradlew connectedAndroidTest
-
-# Run specific test class
-./gradlew test --tests "com.focusmother.android.MonitoringServiceTest"
+# Quality checks
+./gradlew lint                             # Android lint
+./gradlew ktlintCheck                      # Kotlin code style
+./gradlew detekt                           # Static code analysis
+./gradlew test lint ktlintCheck detekt     # All quality checks
 ```
 
 ## Architecture
 
-### Three-Layer Architecture
+### Layer Structure
 
-**UI Layer**: Jetpack Compose + MainActivity
-- Material Design 3 UI in `ui/MainActivity.kt`
-- Shows screen time, top apps, monitoring status
-- Requests permissions and controls service
-
-**Service Layer**: Background monitoring
-- `service/MonitoringService.kt` - Foreground service that checks usage every 5 seconds (configurable)
-- Manages intervention cooldown periods (30 seconds default, configurable)
-- `receiver/BootReceiver.kt` - Restarts monitoring after device reboot
-- `receiver/NotificationActionReceiver.kt` - Handles notification button actions
-
-**Monitor Layer**: Usage detection
-- `monitor/UsageMonitor.kt` - Interfaces with Android's `UsageStatsManager`
-- Detects excessive usage patterns (80% threshold)
-- Provides usage statistics and top apps
-
-### Key Data Flow
-
-1. **MonitoringService** runs in foreground → checks usage every interval
-2. **UsageMonitor** queries `UsageStatsManager` → returns screen time and app usage
-3. Service detects excessive usage → triggers intervention notification
-4. User responds to notification → actions handled by `NotificationActionReceiver`
-5. If distraction app detected → automatically closes app and shows MainActivity
-
-### Critical Constants (MonitoringService.kt)
-
-These values are currently set for testing and should be adjusted:
-
-```kotlin
-// Line 26: Intervention cooldown
-private val interventionCooldown = 30 * 1000L // 30 seconds (testing)
-// Production: 15 * 60 * 1000L (15 minutes)
-
-// Line 75: Usage threshold for distraction apps
-val usageThreshold = 5 * 60 * 1000L // 5 minutes (testing)
-// Production: 30 * 60 * 1000L (30 minutes)
-
-// Line 84: Continuous usage threshold
-val detection = usageMonitor.detectContinuousUsage(thresholdMinutes = 1) // Testing
-// Production: thresholdMinutes = 30
-
-// Line 209: Check interval
-private const val CHECK_INTERVAL_MS = 5000L // 5 seconds (testing)
-// Production: 60_000L (1 minute)
+```
+┌─────────────────────────────────────────────────────────┐
+│  UI Layer                                               │
+│  Activities + Compose Screens + ViewModels              │
+├─────────────────────────────────────────────────────────┤
+│  Domain Layer                                           │
+│  NegotiationManager, AgreementEnforcer, CategoryManager │
+├─────────────────────────────────────────────────────────┤
+│  Data Layer                                             │
+│  Repositories + Room Database + API Services            │
+├─────────────────────────────────────────────────────────┤
+│  Service Layer                                          │
+│  MonitoringService (foreground) + Receivers             │
+└─────────────────────────────────────────────────────────┘
 ```
 
-### Distraction Apps List (MonitoringService.kt:29-37)
+### Key Components
 
-Hardcoded set of package names for apps considered "distracting":
-- Facebook, Instagram, Twitter, TikTok, YouTube
-- Add/remove packages in `distractionPackages` set
+**MonitoringService** (`service/MonitoringService.kt`)
+- Foreground service checking usage every 2 seconds (testing) / 1 minute (production)
+- Priority: agreement violations → adult content → category thresholds → continuous usage
+- Launches `ConversationActivity` when intervention is needed
+- Supports snooze (5 min) and quiet hours
 
-## Permissions Required
+**NegotiationManager** (`domain/NegotiationManager.kt`)
+- State machine: Initial → ProposedTime → Negotiating → AgreementReached/Rejected
+- Max 3 negotiation rounds before forcing agreement
+- Uses `ResponseParser` to extract time durations from user messages
 
-**Critical**: App will not function without Usage Access permission
+**Room Database** (`data/database/FocusMotherDatabase.kt`)
+- Entities: `Agreement`, `ConversationMessage`, `AppCategoryMapping`, `AvatarConfig`
+- DAOs provide Flow-based queries for reactive UI updates
 
-1. `PACKAGE_USAGE_STATS` - Monitor app usage (granted through Settings)
-2. `FOREGROUND_SERVICE` - Run monitoring service in background
-3. `RECEIVE_BOOT_COMPLETED` - Auto-start after reboot
-4. `POST_NOTIFICATIONS` (Android 13+) - Show alerts
+**ConversationRepository** (`data/repository/ConversationRepository.kt`)
+- Rate limiting: 1 request/second minimum, 100 requests/hour max
+- Prompt caching to reduce API costs
+- Auto-prunes messages older than 30 days
 
-Permission check: `UsageMonitor.hasUsageStatsPermission()` returns true if granted
+**CategoryManager** (`domain/CategoryManager.kt`)
+- App categorization with configurable thresholds per category
+- Pre-seeded categories for common apps (social, games, entertainment, etc.)
 
-## Notification Channels
+### Data Flow: Intervention Trigger
 
-Defined in `FocusMotherApplication.kt`:
+1. `MonitoringService` detects threshold exceeded
+2. Launches `ConversationActivity` with context (app, reason)
+3. `ConversationViewModel` manages chat with Claude API
+4. `NegotiationManager` tracks negotiation state
+5. When `AgreementReached`, `AgreementRepository` persists to Room
+6. `AgreementEnforcer` validates active agreements on subsequent checks
 
-1. **monitoring_service** (Low priority) - Ongoing foreground service notification
-2. **usage_alerts** (High priority) - Intervention alerts with vibration
-3. **time_agreements** (Default priority) - Future: countdown timers
+## Testing Thresholds
+
+Currently set for testing (low values for quick triggers):
+
+| Constant | Location | Testing | Production |
+|----------|----------|---------|------------|
+| CHECK_INTERVAL_MS | MonitoringService:342 | 2000 (2s) | 60000 (1m) |
+| interventionCooldown | MonitoringService:44 | 30s | 15m |
+| detectContinuousUsage | MonitoringService:195 | 1 min | 30 min |
+
+## Permissions
+
+**Critical** - App requires Usage Access permission (Settings → Apps → Special access):
+- `PACKAGE_USAGE_STATS` - Monitor app usage
+- `FOREGROUND_SERVICE` - Background monitoring
+- `POST_NOTIFICATIONS` (Android 13+) - Alerts
+
+Check permission: `UsageMonitor.hasUsageStatsPermission()`
+
+## API Integration
+
+**Claude API** (`data/api/ClaudeApiService.kt`)
+- Model: `claude-3-5-sonnet-20241022`
+- Max tokens: 300 (short responses)
+- API key stored via `SecureApiKeyProvider`
+
+**Ready Player Me** (`data/api/ReadyPlayerMeApiService.kt`)
+- 3D avatar generation from selfie
+- GLB model rendering via SceneView
 
 ## Dependencies
 
-- **Kotlin**: 2.0.0
-- **Compose BOM**: 2024.02.00
-- **Min SDK**: 26 (Android 8.0 - required for UsageStatsManager)
+- **Min SDK**: 28 (SceneView requirement)
 - **Target SDK**: 34
-- **Java**: 17
+- **Java**: 17 (required for Kotlin 2.0 and Android Gradle plugin)
+- **Kotlin**: 2.0.0
+- **Room**: 2.6.1 (KSP compiler)
+- **SceneView**: 2.0.0 (3D avatar rendering)
+- **CameraX**: 1.3.1 (selfie capture)
 
-Key libraries:
-- Jetpack Compose + Material3
-- Coroutines (for async operations)
-- DataStore (for preferences)
-- Retrofit + Gson (for future API integration)
-- Room (for local storage, not yet implemented)
-- WorkManager (for background tasks, not yet implemented)
+## Security Notes
 
-## Important Implementation Details
+- Certificate pinning enabled for `api.anthropic.com` and `api.readyplayer.me`
+- ProGuard enabled for release builds with obfuscation
+- Secure file deletion (DoD 5220.22-M) for avatar images (GDPR compliance)
+- API rate limiting prevents cost exploitation
 
-### Usage Detection Algorithm (UsageMonitor.kt:93-108)
+## CI/CD
 
-Detects continuous usage by comparing recent screen time against a threshold:
-- Queries screen time for last N minutes
-- Triggers if usage >= 80% of threshold period
-- Example: 30-minute threshold → triggers at 24+ minutes of usage
+GitHub Actions workflows in `.github/workflows/`:
+- `android-ci.yml` - Runs 4 parallel jobs on push/PR:
+  - `test`: lint, unit tests, coverage report, debug APK build
+  - `security-scan`: dependency vulnerability check, TruffleHog secret scanning
+  - `build-quality`: ktlint, detekt, APK size analysis
+  - `ci-summary`: aggregates results
+- `android-release.yml` - Signed release on version tags
+- `health-check.yml` - Post-deployment validation
 
-### Service Lifecycle
+Release process: `git tag -a v1.0.0 -m "Release" && git push origin v1.0.0`
 
-- Service runs as **foreground service** to prevent being killed
-- Returns `START_STICKY` - system will restart if killed
-- Uses coroutines with `SupervisorJob` for robust error handling
-- Cancels all jobs in `onDestroy()`
-
-### Intervention Flow
-
-1. Check if current app is in `distractionPackages` OR continuous usage detected
-2. Verify `shouldTriggerIntervention()` (respects cooldown)
-3. Call `triggerIntervention()` → shows notification
-4. If distraction app → call `closeDistractionApp()` → brings MainActivity to front
-
-## Testing Considerations
-
-The codebase is currently configured with aggressive testing values to make interventions trigger quickly. Before production:
-
-1. Reset all timing constants in `MonitoringService.kt` to production values
-2. Adjust detection threshold in `UsageMonitor.kt` if needed (currently 80%)
-3. Consider adding debug/release build variants with different thresholds
-
-## Future Integration
-
-The app includes Retrofit and Room dependencies for planned features:
-- Backend API integration (`backend/api/` in parent repo)
-- Cloud sync of agreements and usage data
-- User authentication
-- Cross-device monitoring
-
-These are not yet implemented but dependencies are in place.
+See `KEYSTORE_SETUP.md` for release signing configuration.

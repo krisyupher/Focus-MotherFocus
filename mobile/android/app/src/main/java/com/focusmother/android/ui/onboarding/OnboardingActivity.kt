@@ -35,17 +35,11 @@ import com.focusmother.android.monitor.UsageMonitor
 import com.focusmother.android.ui.MainActivity
 import com.focusmother.android.ui.avatar.AvatarSetupActivity
 import com.focusmother.android.ui.theme.FocusMotherFocusTheme
+import com.focusmother.android.dataStore
 import kotlinx.coroutines.launch
 
 /**
  * OnboardingActivity - Multi-step wizard to welcome new users and setup app.
- *
- * Flow:
- * 1. Welcome - Introduction to Zordon and app purpose
- * 2. Permissions - Request Usage Stats and Notifications
- * 3. Avatar - Optional avatar creation
- * 4. Daily Goal - Set screen time goal
- * 5. Complete - Success message and navigate to MainActivity
  */
 class OnboardingActivity : ComponentActivity() {
 
@@ -82,7 +76,7 @@ class OnboardingActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         usageMonitor = UsageMonitor(this)
-        viewModel = OnboardingViewModel(SettingsRepository(this))
+        viewModel = OnboardingViewModel(SettingsRepository(dataStore))
 
         // Check initial permissions
         lifecycleScope.launch {
@@ -167,7 +161,6 @@ class OnboardingActivity : ComponentActivity() {
                                 OnboardingViewModel.STEP_WELCOME -> WelcomeStep()
                                 OnboardingViewModel.STEP_PERMISSIONS -> PermissionsStep(uiState)
                                 OnboardingViewModel.STEP_AVATAR -> AvatarStep()
-                                OnboardingViewModel.STEP_DAILY_GOAL -> DailyGoalStep(uiState)
                                 OnboardingViewModel.STEP_COMPLETE -> CompleteStep()
                             }
                         }
@@ -482,84 +475,6 @@ class OnboardingActivity : ComponentActivity() {
                     Text("Create Avatar")
                 }
             }
-        }
-    }
-
-    @Composable
-    fun DailyGoalStep(uiState: OnboardingUiState) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(24.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Default.Star,
-                contentDescription = null,
-                tint = Color(0xFF7C0EDA),
-                modifier = Modifier.size(80.dp)
-            )
-
-            Text(
-                text = "Set Your Daily Goal",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFFE0E0E0)
-            )
-
-            Text(
-                text = "Choose your target screen time. I will help you stay within this limit.",
-                style = MaterialTheme.typography.bodyLarge,
-                color = Color(0xFFB0B0B0),
-                textAlign = TextAlign.Center
-            )
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = Color(0xFF1A1A2E)
-                ),
-                border = androidx.compose.foundation.BorderStroke(2.dp, Color(0xFF7C0EDA))
-            ) {
-                Column(
-                    modifier = Modifier.padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = "${uiState.selectedDailyGoalHours} hours",
-                        style = MaterialTheme.typography.displayMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF7C0EDA)
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Slider(
-                        value = uiState.selectedDailyGoalHours.toFloat(),
-                        onValueChange = { viewModel.setDailyGoal(it.toInt()) },
-                        valueRange = 1f..8f,
-                        steps = 6,
-                        colors = SliderDefaults.colors(
-                            thumbColor = Color(0xFF7C0EDA),
-                            activeTrackColor = Color(0xFF7C0EDA),
-                            inactiveTrackColor = Color(0xFF3A3A3A)
-                        )
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text("1h", style = MaterialTheme.typography.bodySmall, color = Color(0xFFB0B0B0))
-                        Text("8h", style = MaterialTheme.typography.bodySmall, color = Color(0xFFB0B0B0))
-                    }
-                }
-            }
-
-            Text(
-                text = "💡 Recommended: 2-4 hours for healthy balance",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color(0xFFB0B0B0),
-                textAlign = TextAlign.Center
-            )
         }
     }
 

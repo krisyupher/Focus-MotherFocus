@@ -76,10 +76,17 @@ class ConversationViewModel(
                 // Store for retry
                 lastMessage = message
 
+                // Add user message to UI immediately (optimistic update)
+                val userMessage = ConversationMessage.userMessage(
+                    conversationId = conversationId,
+                    content = message
+                )
+                _messages.value = _messages.value.orEmpty() + userMessage
+
                 // Update state to waiting
                 _conversationState.value = ConversationState.WaitingForResponse
 
-                // Send message to repository
+                // Send message to repository (it will save user message to database)
                 val result = repository.sendMessage(
                     conversationId = conversationId,
                     message = message,
@@ -89,7 +96,7 @@ class ConversationViewModel(
                 // Handle result
                 result.fold(
                     onSuccess = { response ->
-                        // Reload conversation history
+                        // Reload conversation history to show both user and AI messages from database
                         loadHistory()
 
                         // Update state to showing response

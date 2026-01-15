@@ -124,6 +124,14 @@ class ConversationRepository(
             val apiKey = apiKeyProvider.getApiKey()
                 ?: return Result.failure(IllegalStateException("API key not found"))
 
+            // Save user message to database FIRST (before API call)
+            // This ensures the message appears immediately in the UI
+            val userMessage = ConversationMessage.userMessage(
+                conversationId = conversationId,
+                content = message
+            )
+            conversationDao.insert(userMessage)
+
             // Get conversation history (last 10 messages to keep context manageable)
             val history = conversationDao.getConversation(conversationId)
                 .takeLast(10)
@@ -167,13 +175,6 @@ class ConversationRepository(
 
             // Extract text from response
             val aiResponse = response.getTextContent()
-
-            // Save user message to database
-            val userMessage = ConversationMessage.userMessage(
-                conversationId = conversationId,
-                content = message
-            )
-            conversationDao.insert(userMessage)
 
             // Save AI response to database
             val assistantMessage = ConversationMessage.assistantMessage(
